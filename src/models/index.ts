@@ -7,3 +7,4 @@ export * from './content';
 export * from './script';
 export * from './audio';
 export * from './playback';
+export * from './errors';
