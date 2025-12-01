@@ -51,8 +51,8 @@
     - Test error handling for database failures
     - _Requirements: 9.5_
 
-- [ ] 4. Implement Agent Management service
-  - [ ] 4.1 Create agent CRUD operations
+- [x] 4. Implement Agent Management service
+  - [x] 4.1 Create agent CRUD operations
     - Implement createAgent function with validation
     - Implement getAgent function
     - Implement listAgents function
@@ -60,16 +60,16 @@
     - Implement deleteAgent function
     - Add unique name validation
     - _Requirements: 4.1, 4.2, 4.4_
-  - [ ] 4.2 Write property test for agent creation round-trip
+  - [x] 4.2 Write property test for agent creation round-trip
     - **Property 13: Agent creation round-trip**
     - **Validates: Requirements 4.1**
-  - [ ] 4.3 Write property test for agent listing completeness
+  - [x] 4.3 Write property test for agent listing completeness
     - **Property 14: Agent listing completeness**
     - **Validates: Requirements 4.2**
-  - [ ] 4.4 Write property test for multiple agent support
+  - [x] 4.4 Write property test for multiple agent support
     - **Property 15: Multiple agent support**
     - **Validates: Requirements 4.4**
-  - [ ] 4.5 Write unit tests for agent validation
+  - [x] 4.5 Write unit tests for agent validation
     - Test validation rules for agent creation
     - Test error handling for invalid agent data
     - Test unique name constraint
