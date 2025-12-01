@@ -1,0 +1,40 @@
+// Configuration utilities
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export const config = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '3000', 10),
+  localMode: process.env.LOCAL_MODE === 'true',
+  
+  aws: {
+    region: process.env.AWS_REGION || 'us-east-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+  
+  localstack: {
+    endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
+    useLocalStack: process.env.USE_LOCALSTACK === 'true',
+  },
+  
+  s3: {
+    bucketName: process.env.S3_BUCKET_NAME || 'pdf-lecture-service',
+    pdfPrefix: process.env.S3_PDF_PREFIX || 'pdfs',
+    audioPrefix: process.env.S3_AUDIO_PREFIX || 'audio',
+    cachePrefix: process.env.S3_CACHE_PREFIX || 'cache',
+  },
+  
+  dynamodb: {
+    jobsTable: process.env.DYNAMODB_JOBS_TABLE || 'pdf-lecture-jobs',
+    agentsTable: process.env.DYNAMODB_AGENTS_TABLE || 'pdf-lecture-agents',
+    contentTable: process.env.DYNAMODB_CONTENT_TABLE || 'pdf-lecture-content',
+  },
+  
+  processing: {
+    maxPdfSizeMB: parseInt(process.env.MAX_PDF_SIZE_MB || '100', 10),
+    analysisTimeoutMs: parseInt(process.env.ANALYSIS_TIMEOUT_MS || '300000', 10),
+    audioSynthesisTimeoutMs: parseInt(process.env.AUDIO_SYNTHESIS_TIMEOUT_MS || '600000', 10),
+  },
+};

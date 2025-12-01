@@ -1,0 +1,472 @@
+# Implementation Plan
+
+- [x] 1. Set up project structure and development environment
+  - Initialize TypeScript project with Node.js 20.x
+  - Configure build tools (tsconfig, webpack/esbuild for Lambda bundling)
+  - Set up testing framework (Jest) and property-based testing library (fast-check)
+  - Create directory structure: src/{functions,models,services,utils,tests}
+  - Configure local development environment with Express.js server
+  - Set up Docker Compose for LocalStack (S3, DynamoDB emulation)
+  - Create environment configuration with dotenv
+  - _Requirements: 10.1, 10.5_
+
+- [ ] 2. Implement core data models and interfaces
+  - [ ] 2.1 Create TypeScript interfaces for all data models
+    - Define Job, JobStatus, StageStatus interfaces
+    - Define LectureAgent, PersonalityConfig, VoiceConfig interfaces
+    - Define ExtractedContent, PageContent, Figure, Table, Formula, Citation interfaces
+    - Define SegmentedContent, ContentSegment, ContentBlock interfaces
+    - Define LectureScript, ScriptSegment, ScriptBlock interfaces
+    - Define AudioOutput, WordTiming interfaces
+    - Define PlaybackState, HighlightState interfaces
+    - Define error response interfaces
+    - _Requirements: 1.5, 4.1, 2.1, 3.5, 5.6, 6.6_
+  - [ ] 2.2 Write property test for data model validation
+    - **Property 10: Segment structure validity**
+    - **Validates: Requirements 3.5**
+  - [ ] 2.3 Write property test for timing data consistency
+    - **Property 24: Timing data consistency**
+    - **Validates: Requirements 6.6**
+
+- [ ] 3. Implement database layer and storage utilities
+  - [ ] 3.1 Create DynamoDB client wrapper with local/production modes
+    - Implement connection management for DynamoDB
+    - Create table schemas for Jobs, Agents, Content
+    - Implement CRUD operations for each table
+    - Add support for LocalStack in development
+    - _Requirements: 9.5, 10.5_
+  - [ ] 3.2 Create S3 client wrapper with local/production modes
+    - Implement S3 upload/download utilities
+    - Create signed URL generation for temporary access
+    - Add support for LocalStack in development
+    - Implement streaming for large files
+    - _Requirements: 1.1, 6.1, 10.5_
+  - [ ] 3.3 Write property test for function execution and persistence
+    - **Property 32: Function execution and persistence**
+    - **Validates: Requirements 9.2, 9.5**
+  - [ ] 3.4 Write unit tests for database operations
+    - Test CRUD operations for Jobs table
+    - Test CRUD operations for Agents table
+    - Test CRUD operations for Content table
+    - Test error handling for database failures
+    - _Requirements: 9.5_
+
+- [ ] 4. Implement Agent Management service
+  - [ ] 4.1 Create agent CRUD operations
+    - Implement createAgent function with validation
+    - Implement getAgent function
+    - Implement listAgents function
+    - Implement updateAgent function
+    - Implement deleteAgent function
+    - Add unique name validation
+    - _Requirements: 4.1, 4.2, 4.4_
+  - [ ] 4.2 Write property test for agent creation round-trip
+    - **Property 13: Agent creation round-trip**
+    - **Validates: Requirements 4.1**
+  - [ ] 4.3 Write property test for agent listing completeness
+    - **Property 14: Agent listing completeness**
+    - **Validates: Requirements 4.2**
+  - [ ] 4.4 Write property test for multiple agent support
+    - **Property 15: Multiple agent support**
+    - **Validates: Requirements 4.4**
+  - [ ] 4.5 Write unit tests for agent validation
+    - Test validation rules for agent creation
+    - Test error handling for invalid agent data
+    - Test unique name constraint
+    - _Requirements: 4.1_
+
+- [ ] 5. Implement PDF Upload function
+  - [ ] 5.1 Create upload validation logic
+    - Implement file size validation (100MB limit)
+    - Implement PDF format validation using magic bytes
+    - Implement error response generation
+    - _Requirements: 1.2, 1.3_
+  - [ ] 5.2 Implement upload handler
+    - Accept PDF file upload
+    - Generate unique job ID
+    - Store PDF in S3
+    - Create job record in database with 'queued' status
+    - Return job ID to client
+    - Trigger Content Analysis function
+    - _Requirements: 1.1, 1.5_
+  - [ ] 5.3 Write property test for valid PDF acceptance
+    - **Property 1: Valid PDF acceptance**
+    - **Validates: Requirements 1.1, 1.5**
+  - [ ] 5.4 Write property test for unique job ID generation
+    - **Property 2: Unique job ID generation**
+    - **Validates: Requirements 1.5**
+  - [ ] 5.5 Write property test for invalid input rejection
+    - **Property 3: Invalid input rejection**
+    - **Validates: Requirements 1.3**
+  - [ ] 5.6 Write unit tests for upload edge cases
+    - Test file exactly at 100MB limit
+    - Test corrupted PDF handling
+    - Test empty file handling
+    - _Requirements: 1.2, 1.3_
+
+- [ ] 6. Implement Content Analyzer function
+  - [ ] 6.1 Set up PDF parsing
+    - Integrate pdf-parse or pdf.js library
+    - Implement text extraction from all pages
+    - Implement element position detection (figures, tables, formulas)
+    - _Requirements: 2.1_
+  - [ ] 6.2 Implement figure analysis
+    - Extract images from PDF
+    - Send images to vision LLM API (e.g., GPT-4 Vision, Claude Vision)
+    - Generate descriptive explanations
+    - Store figure data with descriptions
+    - _Requirements: 2.2_
+  - [ ] 6.3 Implement table extraction and interpretation
+    - Extract table structure (headers, rows)
+    - Send table data to LLM for interpretation
+    - Store table data with interpretations
+    - _Requirements: 2.3_
+  - [ ] 6.4 Implement formula parsing and explanation
+    - Extract mathematical formulas (detect LaTeX or MathML)
+    - Send formulas to LLM for explanation
+    - Store formula data with explanations
+    - _Requirements: 2.4_
+  - [ ] 6.5 Implement citation detection
+    - Use regex patterns to identify citations
+    - Parse citation information (authors, year, title)
+    - Store citation data
+    - _Requirements: 2.5_
+  - [ ] 6.6 Integrate all extraction components
+    - Orchestrate parallel processing of figures, tables, formulas
+    - Combine all extracted content into ExtractedContent structure
+    - Store extracted content in database
+    - Update job status to 'analyzing' → 'segmenting'
+    - Trigger Content Segmenter function
+    - _Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [ ] 6.7 Write property test for complete text extraction
+    - **Property 4: Complete text extraction**
+    - **Validates: Requirements 2.1**
+  - [ ] 6.8 Write property test for multi-modal content detection
+    - **Property 5: Multi-modal content detection**
+    - **Validates: Requirements 1.4, 2.2, 2.3, 2.4, 2.5**
+  - [ ] 6.9 Write property test for figure description generation
+    - **Property 6: Figure description generation**
+    - **Validates: Requirements 2.2**
+  - [ ] 6.10 Write property test for table interpretation
+    - **Property 7: Table interpretation**
+    - **Validates: Requirements 2.3**
+  - [ ] 6.11 Write property test for formula explanation
+    - **Property 8: Formula explanation**
+    - **Validates: Requirements 2.4**
+  - [ ] 6.12 Write unit tests for content analyzer
+    - Test text extraction from multi-page PDF
+    - Test handling of PDFs with no figures/tables
+    - Test error handling for LLM API failures
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+- [ ] 7. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 8. Implement Content Segmenter function
+  - [ ] 8.1 Create segmentation prompt for LLM
+    - Design prompt that instructs LLM to identify topics
+    - Include instructions for grouping related concepts
+    - Request structured output with segment titles and boundaries
+    - _Requirements: 3.1, 3.2_
+  - [ ] 8.2 Implement dependency analysis
+    - Parse LLM output to identify prerequisite relationships
+    - Build dependency graph between segments
+    - Implement topological sort for segment ordering
+    - _Requirements: 3.4_
+  - [ ] 8.3 Implement segmentation handler
+    - Retrieve extracted content from database
+    - Send content to LLM for segmentation
+    - Process LLM response into SegmentedContent structure
+    - Apply dependency-based ordering
+    - Store segmented content in database
+    - Update job status to 'segmenting' → 'generating_script'
+    - Trigger Script Generator function
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 8.4 Write property test for segmentation completeness
+    - **Property 9: Segmentation completeness**
+    - **Validates: Requirements 3.1, 3.5**
+  - [ ] 8.5 Write property test for prerequisite ordering
+    - **Property 11: Prerequisite ordering**
+    - **Validates: Requirements 3.4**
+  - [ ] 8.6 Write property test for coherent grouping
+    - **Property 12: Coherent grouping**
+    - **Validates: Requirements 3.2**
+  - [ ] 8.7 Write unit tests for segmentation logic
+    - Test topological sort with various dependency graphs
+    - Test handling of circular dependencies
+    - Test segmentation with single-topic content
+    - _Requirements: 3.3, 3.4_
+
+- [ ] 9. Implement Script Generator function
+  - [ ] 9.1 Create script generation prompts
+    - Design base prompt for explaining scientific concepts accessibly
+    - Create personality-specific prompt variations (humorous, serious, etc.)
+    - Include instructions for verbal descriptions of visual elements
+    - _Requirements: 5.2, 5.5_
+  - [ ] 9.2 Implement personality application logic
+    - Retrieve agent configuration
+    - Merge agent personality instructions with base prompt
+    - Apply tone-specific modifications (humor markers, formal language)
+    - _Requirements: 4.5, 4.6, 5.3, 5.4_
+  - [ ] 9.3 Implement timing estimation
+    - Calculate estimated duration based on word count
+    - Use average speaking rate (150-160 words per minute)
+    - Assign timing to each script block
+    - Calculate total lecture duration
+    - _Requirements: 5.6_
+  - [ ] 9.4 Implement script generation handler
+    - Retrieve segmented content and agent from database
+    - Generate script for each segment using LLM
+    - Apply personality and timing calculations
+    - Store lecture script in database
+    - Update job status to 'generating_script' → 'synthesizing_audio'
+    - Trigger Audio Synthesizer function
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+  - [ ] 9.5 Write property test for script generation completeness
+    - **Property 16: Script generation completeness**
+    - **Validates: Requirements 5.1**
+  - [ ] 9.6 Write property test for agent personality influence
+    - **Property 17: Agent personality influence**
+    - **Validates: Requirements 4.5, 4.6, 5.3, 5.4**
+  - [ ] 9.7 Write property test for visual element descriptions
+    - **Property 18: Visual element descriptions**
+    - **Validates: Requirements 5.5**
+  - [ ] 9.8 Write property test for script timing data
+    - **Property 19: Script timing data**
+    - **Validates: Requirements 5.6**
+  - [ ] 9.9 Write property test for accessibility improvement
+    - **Property 20: Accessibility improvement**
+    - **Validates: Requirements 5.2**
+  - [ ] 9.10 Write property test for agent selection persistence
+    - **Property 34: Agent selection persistence**
+    - **Validates: Requirements 4.3**
+  - [ ] 9.11 Write unit tests for script generation
+    - Test script generation with different agent personalities
+    - Test handling of segments with many visual elements
+    - Test error handling for LLM API failures
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+
+- [ ] 10. Implement Audio Synthesizer function
+  - [ ] 10.1 Integrate TTS API
+    - Set up TTS service client (e.g., AWS Polly, Google TTS, ElevenLabs)
+    - Implement voice configuration mapping from agent settings
+    - Implement audio generation with voice parameters
+    - _Requirements: 6.1, 6.2_
+  - [ ] 10.2 Implement word-level timing extraction
+    - Request word-level timestamps from TTS API
+    - Parse timing data into WordTiming array
+    - Validate timing monotonicity
+    - _Requirements: 6.6_
+  - [ ] 10.3 Implement audio synthesis handler
+    - Retrieve lecture script and agent from database
+    - Concatenate script blocks into full text
+    - Generate audio with agent's voice settings
+    - Extract word-level timing data
+    - Store MP3 file in S3
+    - Store audio metadata and timings in database
+    - Update job status to 'synthesizing_audio' → 'completed'
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.6_
+  - [ ] 10.4 Write property test for audio generation success
+    - **Property 21: Audio generation success**
+    - **Validates: Requirements 6.1**
+  - [ ] 10.5 Write property test for voice configuration application
+    - **Property 22: Voice configuration application**
+    - **Validates: Requirements 6.2, 6.3, 6.4**
+  - [ ] 10.6 Write property test for audio metadata completeness
+    - **Property 23: Audio metadata completeness**
+    - **Validates: Requirements 6.6**
+  - [ ] 10.7 Write unit tests for audio synthesis
+    - Test audio generation with different voice settings
+    - Test handling of very long scripts
+    - Test error handling for TTS API failures
+    - _Requirements: 6.1, 6.2, 6.6_
+
+- [ ] 11. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 12. Implement Status Query function
+  - [ ] 12.1 Create status query handler
+    - Implement job status retrieval by job ID
+    - Return job status, stage progress, and error information
+    - Handle non-existent job IDs
+    - _Requirements: 1.5_
+  - [ ] 12.2 Write unit tests for status queries
+    - Test status retrieval for various job states
+    - Test error handling for invalid job IDs
+    - _Requirements: 1.5_
+
+- [ ] 13. Implement Immersive Reader playback interface
+  - [ ] 13.1 Create frontend HTML/CSS structure
+    - Design split-pane layout (PDF viewer | Script viewer)
+    - Implement audio player controls
+    - Style highlighting for script text
+    - Add responsive design for different screen sizes
+    - _Requirements: 7.1, 7.2_
+  - [ ] 13.2 Integrate PDF viewer
+    - Use PDF.js or similar library for PDF rendering
+    - Implement page navigation
+    - Implement PDF region highlighting
+    - _Requirements: 7.1, 7.4_
+  - [ ] 13.3 Implement script display and highlighting
+    - Render lecture script with proper formatting
+    - Implement word-level highlighting
+    - Implement auto-scroll to keep highlighted text visible
+    - _Requirements: 7.2, 7.3, 8.3_
+  - [ ] 13.4 Implement audio synchronization
+    - Load audio file and word timing data
+    - Attach timeupdate event listener to audio element
+    - Implement binary search for current word lookup
+    - Update highlighting based on current playback time
+    - Update PDF page based on current script block
+    - _Requirements: 7.3, 7.4, 8.1_
+  - [ ] 13.5 Implement playback controls
+    - Implement play/pause functionality
+    - Implement seek functionality
+    - Update highlighting on seek operations
+    - Ensure synchronization on all playback state changes
+    - _Requirements: 7.5_
+  - [ ] 13.6 Write property test for highlight synchronization
+    - **Property 25: Highlight synchronization**
+    - **Validates: Requirements 7.3, 8.1**
+  - [ ] 13.7 Write property test for single highlight invariant
+    - **Property 26: Single highlight invariant**
+    - **Validates: Requirements 8.2**
+  - [ ] 13.8 Write property test for PDF page synchronization
+    - **Property 27: PDF page synchronization**
+    - **Validates: Requirements 7.4**
+  - [ ] 13.9 Write property test for seek consistency
+    - **Property 28: Seek consistency**
+    - **Validates: Requirements 7.5**
+  - [ ] 13.10 Write property test for auto-scroll behavior
+    - **Property 29: Auto-scroll behavior**
+    - **Validates: Requirements 8.3**
+  - [ ] 13.11 Write property test for PDF element highlighting
+    - **Property 30: PDF element highlighting**
+    - **Validates: Requirements 8.4**
+  - [ ] 13.12 Write property test for long-duration synchronization accuracy
+    - **Property 31: Long-duration synchronization accuracy**
+    - **Validates: Requirements 8.5**
+  - [ ] 13.13 Write unit tests for playback interface
+    - Test audio player initialization
+    - Test highlighting updates at specific timestamps
+    - Test seek to various positions
+    - Test edge cases (beginning, end of audio)
+    - _Requirements: 7.3, 7.4, 7.5, 8.1_
+
+- [ ] 14. Implement local development server
+  - [ ] 14.1 Create Express.js server wrapper
+    - Set up Express application
+    - Create HTTP endpoints for each serverless function
+    - Implement request/response mapping to Lambda function signatures
+    - Add CORS support for frontend development
+    - _Requirements: 10.1, 10.2_
+  - [ ] 14.2 Implement local endpoint handlers
+    - POST /api/upload - Upload function wrapper
+    - POST /api/analyze/:jobId - Analysis function wrapper
+    - POST /api/segment/:jobId - Segmentation function wrapper
+    - POST /api/script/:jobId - Script generation function wrapper
+    - POST /api/audio/:jobId - Audio synthesis function wrapper
+    - GET /api/status/:jobId - Status query wrapper
+    - GET /api/agents - List agents wrapper
+    - POST /api/agents - Create agent wrapper
+    - GET /api/player/:jobId - Serve playback interface
+    - _Requirements: 10.2, 10.3_
+  - [ ] 14.3 Write property test for local-serverless interface compatibility
+    - **Property 35: Local-serverless interface compatibility**
+    - **Validates: Requirements 10.2, 10.3**
+  - [ ] 14.4 Write integration tests for local endpoints
+    - Test complete pipeline from upload to completion
+    - Test agent CRUD operations
+    - Test error handling across endpoints
+    - _Requirements: 10.4_
+
+- [ ] 15. Implement serverless deployment configuration
+  - [ ] 15.1 Create Lambda function wrappers
+    - Wrap each service function in Lambda handler format
+    - Implement event parsing and response formatting
+    - Add error handling and logging
+    - _Requirements: 9.1, 9.2_
+  - [ ] 15.2 Create infrastructure-as-code configuration
+    - Define Lambda functions (memory, timeout, runtime)
+    - Define API Gateway endpoints
+    - Define DynamoDB tables with auto-scaling
+    - Define S3 buckets with encryption
+    - Define IAM roles and permissions
+    - Define EventBridge rules for function triggering
+    - Use AWS SAM, Serverless Framework, or Terraform
+    - _Requirements: 9.1, 9.3_
+  - [ ] 15.3 Implement asynchronous processing
+    - Use EventBridge or SQS for function-to-function communication
+    - Implement immediate job ID return for long operations
+    - Ensure functions don't block on downstream processing
+    - _Requirements: 9.4_
+  - [ ] 15.4 Write property test for asynchronous processing support
+    - **Property 33: Asynchronous processing support**
+    - **Validates: Requirements 9.4**
+  - [ ] 15.5 Write deployment tests
+    - Test Lambda function packaging
+    - Test environment variable configuration
+    - Test IAM permissions
+    - _Requirements: 9.1, 9.2_
+
+- [ ] 16. Implement error handling and retry logic
+  - [ ] 16.1 Add validation error handling
+    - Implement consistent error response format
+    - Add validation at all input points
+    - Return appropriate HTTP status codes
+    - _Requirements: 1.2, 1.3_
+  - [ ] 16.2 Add external service error handling
+    - Implement retry logic with exponential backoff
+    - Implement circuit breaker for external APIs
+    - Add fallback strategies where applicable
+    - Log detailed error information
+    - _Requirements: 2.2, 2.3, 2.4, 5.1, 6.1_
+  - [ ] 16.3 Add resource error handling
+    - Implement timeouts for all operations
+    - Implement streaming for large files
+    - Add cleanup in finally blocks
+    - _Requirements: 1.1, 6.1_
+  - [ ] 16.4 Write unit tests for error handling
+    - Test retry logic with transient failures
+    - Test circuit breaker behavior
+    - Test timeout handling
+    - Test error response formatting
+    - _Requirements: 1.3, 2.2, 5.1, 6.1_
+
+- [ ] 17. Implement monitoring and logging
+  - [ ] 17.1 Add structured logging
+    - Implement JSON logging with correlation IDs
+    - Add log levels (ERROR, WARN, INFO, DEBUG)
+    - Redact sensitive data in logs
+    - _Requirements: 9.2_
+  - [ ] 17.2 Add metrics collection
+    - Track request counts and error rates
+    - Track processing times per stage
+    - Track external API latency
+    - Track storage usage
+    - _Requirements: 9.2_
+  - [ ] 17.3 Configure CloudWatch integration
+    - Set up log groups for each Lambda function
+    - Configure metric filters
+    - Set up alarms for error rates and timeouts
+    - _Requirements: 9.2_
+
+- [ ] 18. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 19. Create documentation
+  - [ ] 19.1 Write API documentation
+    - Document all REST endpoints
+    - Include request/response examples
+    - Document error codes and messages
+    - _Requirements: 1.1, 4.1, 4.2_
+  - [ ] 19.2 Write deployment guide
+    - Document local development setup
+    - Document serverless deployment process
+    - Document environment configuration
+    - _Requirements: 10.1, 10.5_
+  - [ ] 19.3 Write user guide
+    - Document PDF upload process
+    - Document agent creation and management
+    - Document playback interface usage
+    - _Requirements: 1.1, 4.1, 7.1, 7.2_
