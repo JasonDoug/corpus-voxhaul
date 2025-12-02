@@ -247,18 +247,18 @@ ty 8: Formula explanation**
     - Test error handling for LLM API failures
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 10. Implement Audio Synthesizer function
-  - [ ] 10.1 Integrate TTS API
+- [x] 10. Implement Audio Synthesizer function
+  - [x] 10.1 Integrate TTS API
     - Set up TTS service client (e.g., AWS Polly, Google TTS, ElevenLabs)
     - Implement voice configuration mapping from agent settings
     - Implement audio generation with voice parameters
     - _Requirements: 6.1, 6.2_
-  - [ ] 10.2 Implement word-level timing extraction
+  - [x] 10.2 Implement word-level timing extraction
     - Request word-level timestamps from TTS API
     - Parse timing data into WordTiming array
     - Validate timing monotonicity
     - _Requirements: 6.6_
-  - [ ] 10.3 Implement audio synthesis handler
+  - [x] 10.3 Implement audio synthesis handler
     - Retrieve lecture script and agent from database
     - Concatenate script blocks into full text
     - Generate audio with agent's voice settings
@@ -267,16 +267,16 @@ ty 8: Formula explanation**
     - Store audio metadata and timings in database
     - Update job status to 'synthesizing_audio' → 'completed'
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.6_
-  - [ ] 10.4 Write property test for audio generation success
+  - [x] 10.4 Write property test for audio generation success
     - **Property 21: Audio generation success**
     - **Validates: Requirements 6.1**
-  - [ ] 10.5 Write property test for voice configuration application
+  - [x] 10.5 Write property test for voice configuration application
     - **Property 22: Voice configuration application**
     - **Validates: Requirements 6.2, 6.3, 6.4**
-  - [ ] 10.6 Write property test for audio metadata completeness
+  - [x] 10.6 Write property test for audio metadata completeness
     - **Property 23: Audio metadata completeness**
     - **Validates: Requirements 6.6**
-  - [ ] 10.7 Write unit tests for audio synthesis
+  - [x] 10.7 Write unit tests for audio synthesis
     - Test audio generation with different voice settings
     - Test handling of very long scripts
     - Test error handling for TTS API failures
