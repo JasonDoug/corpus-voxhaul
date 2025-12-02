@@ -198,24 +198,24 @@ ty 8: Formula explanation**
     - Test segmentation with single-topic content
     - _Requirements: 3.3, 3.4_
 
-- [ ] 9. Implement Script Generator function
-  - [ ] 9.1 Create script generation prompts
+- [x] 9. Implement Script Generator function
+  - [x] 9.1 Create script generation prompts
     - Design base prompt for explaining scientific concepts accessibly
     - Create personality-specific prompt variations (humorous, serious, etc.)
     - Include instructions for verbal descriptions of visual elements
     - _Requirements: 5.2, 5.5_
-  - [ ] 9.2 Implement personality application logic
+  - [x] 9.2 Implement personality application logic
     - Retrieve agent configuration
     - Merge agent personality instructions with base prompt
     - Apply tone-specific modifications (humor markers, formal language)
     - _Requirements: 4.5, 4.6, 5.3, 5.4_
-  - [ ] 9.3 Implement timing estimation
+  - [x] 9.3 Implement timing estimation
     - Calculate estimated duration based on word count
     - Use average speaking rate (150-160 words per minute)
     - Assign timing to each script block
     - Calculate total lecture duration
     - _Requirements: 5.6_
-  - [ ] 9.4 Implement script generation handler
+  - [x] 9.4 Implement script generation handler
     - Retrieve segmented content and agent from database
     - Generate script for each segment using LLM
     - Apply personality and timing calculations
@@ -223,25 +223,25 @@ ty 8: Formula explanation**
     - Update job status to 'generating_script' → 'synthesizing_audio'
     - Trigger Audio Synthesizer function
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
-  - [ ] 9.5 Write property test for script generation completeness
+  - [x] 9.5 Write property test for script generation completeness
     - **Property 16: Script generation completeness**
     - **Validates: Requirements 5.1**
-  - [ ] 9.6 Write property test for agent personality influence
+  - [x] 9.6 Write property test for agent personality influence
     - **Property 17: Agent personality influence**
     - **Validates: Requirements 4.5, 4.6, 5.3, 5.4**
-  - [ ] 9.7 Write property test for visual element descriptions
+  - [x] 9.7 Write property test for visual element descriptions
     - **Property 18: Visual element descriptions**
     - **Validates: Requirements 5.5**
-  - [ ] 9.8 Write property test for script timing data
+  - [x] 9.8 Write property test for script timing data
     - **Property 19: Script timing data**
     - **Validates: Requirements 5.6**
-  - [ ] 9.9 Write property test for accessibility improvement
+  - [x] 9.9 Write property test for accessibility improvement
     - **Property 20: Accessibility improvement**
     - **Validates: Requirements 5.2**
-  - [ ] 9.10 Write property test for agent selection persistence
+  - [x] 9.10 Write property test for agent selection persistence
     - **Property 34: Agent selection persistence**
     - **Validates: Requirements 4.3**
-  - [ ] 9.11 Write unit tests for script generation
+  - [x] 9.11 Write unit tests for script generation
     - Test script generation with different agent personalities
     - Test handling of segments with many visual elements
     - Test error handling for LLM API failures
