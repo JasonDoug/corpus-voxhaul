@@ -3,11 +3,18 @@ import AWS from 'aws-sdk';
 import { Readable } from 'stream';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { ResourceError, ExternalServiceError } from '../utils/errors';
+import { withRetry } from '../utils/retry';
 
 // Configure AWS SDK based on environment
 const s3Config: AWS.S3.ClientConfiguration = {
   region: config.aws.region,
   s3ForcePathStyle: true, // Required for LocalStack
+  httpOptions: {
+    timeout: 30000, // 30 second timeout for operations
+    connectTimeout: 5000, // 5 second connection timeout
+  },
+  maxRetries: 0, // We handle retries ourselves
 };
 
 if (config.localstack.useLocalStack) {
@@ -23,8 +30,20 @@ const s3 = new AWS.S3(s3Config);
 
 // Helper function to handle S3 errors
 function handleS3Error(error: any, operation: string): never {
-  logger.error(`S3 ${operation} failed`, { error: error.message });
-  throw new Error(`Storage operation failed: ${operation}`);
+  logger.error(`S3 ${operation} failed`, { error: error.message, code: error.code });
+  
+  // Check for timeout errors
+  if (error.code === 'RequestTimeout' || error.code === 'TimeoutError') {
+    throw new ResourceError(`Storage operation timed out: ${operation}`, { error: error.message });
+  }
+  
+  // Check for resource errors
+  if (error.code === 'NoSuchBucket' || error.code === 'NoSuchKey') {
+    throw new ResourceError(`Storage resource not found: ${operation}`, { error: error.message });
+  }
+  
+  // Other errors are external service errors
+  throw new ExternalServiceError(`Storage operation failed: ${operation}`, 's3', { error: error.message });
 }
 
 // ============================================================================
@@ -32,30 +51,32 @@ function handleS3Error(error: any, operation: string): never {
 // ============================================================================
 
 export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: string): Promise<string> {
-  try {
-    const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
-    
-    await s3.putObject({
-      Bucket: config.s3.bucketName,
-      Key: key,
-      Body: pdfBuffer,
-      ContentType: 'application/pdf',
-      Metadata: {
-        originalFilename: filename,
-        jobId,
-      },
-    }).promise();
-    
-    logger.info('PDF uploaded', { jobId, key });
-    
-    // Return the S3 URL
-    if (config.localstack.useLocalStack) {
-      return `${config.localstack.endpoint}/${config.s3.bucketName}/${key}`;
+  return withRetry(async () => {
+    try {
+      const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+      
+      await s3.putObject({
+        Bucket: config.s3.bucketName,
+        Key: key,
+        Body: pdfBuffer,
+        ContentType: 'application/pdf',
+        Metadata: {
+          originalFilename: filename,
+          jobId,
+        },
+      }).promise();
+      
+      logger.info('PDF uploaded', { jobId, key });
+      
+      // Return the S3 URL
+      if (config.localstack.useLocalStack) {
+        return `${config.localstack.endpoint}/${config.s3.bucketName}/${key}`;
+      }
+      return `https://${config.s3.bucketName}.s3.${config.aws.region}.amazonaws.com/${key}`;
+    } catch (error) {
+      handleS3Error(error, 'uploadPDF');
     }
-    return `https://${config.s3.bucketName}.s3.${config.aws.region}.amazonaws.com/${key}`;
-  } catch (error) {
-    handleS3Error(error, 'uploadPDF');
-  }
+  }, { maxAttempts: 3, initialDelayMs: 1000 });
 }
 
 export async function downloadPDF(jobId: string): Promise<Buffer> {

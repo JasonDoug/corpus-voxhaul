@@ -1,5 +1,7 @@
 // Audio Synthesizer service - Convert lecture scripts to MP3 audio with word-level timing
 import { logger } from '../utils/logger';
+import { withRetryAndCircuitBreaker } from '../utils/retry';
+import { ExternalServiceError } from '../utils/errors';
 import { LectureAgent } from '../models/agent';
 import { LectureScript } from '../models/script';
 import { AudioOutput, WordTiming } from '../models/audio';
@@ -103,62 +105,73 @@ export class PollyTTSProvider implements TTSProvider {
       voiceId: voiceConfig.voiceId,
     });
 
-    try {
-      // Request speech synthesis with word-level timing
-      const params = {
-        Text: text,
-        OutputFormat: 'mp3',
-        VoiceId: voiceConfig.voiceId,
-        Engine: 'neural', // Use neural engine for better quality
-        SpeechMarkTypes: ['word'], // Request word-level timing
-      };
-
-      // Get audio stream
-      const audioResult = await this.polly.synthesizeSpeech(params).promise();
-      const audioBuffer = audioResult.AudioStream as Buffer;
-
-      // Get word timing marks
-      const timingParams = {
-        ...params,
-        OutputFormat: 'json',
-      };
-      const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
-      const timingData = timingResult.AudioStream.toString('utf-8');
-      
-      // Parse timing marks (each line is a JSON object)
-      const wordTimings: WordTiming[] = [];
-      const lines = timingData.split('\n').filter((line: string) => line.trim());
-      
-      for (const line of lines) {
+    return withRetryAndCircuitBreaker(
+      'aws-polly',
+      async () => {
         try {
-          const mark = JSON.parse(line);
-          if (mark.type === 'word') {
-            wordTimings.push({
-              word: mark.value,
-              startTime: mark.time / 1000, // Convert ms to seconds
-              endTime: (mark.time + mark.duration) / 1000,
-              scriptBlockId: 'unknown', // Will be set later
-            });
+          // Request speech synthesis with word-level timing
+          const params = {
+            Text: text,
+            OutputFormat: 'mp3',
+            VoiceId: voiceConfig.voiceId,
+            Engine: 'neural', // Use neural engine for better quality
+            SpeechMarkTypes: ['word'], // Request word-level timing
+          };
+
+          // Get audio stream
+          const audioResult = await this.polly.synthesizeSpeech(params).promise();
+          const audioBuffer = audioResult.AudioStream as Buffer;
+
+          // Get word timing marks
+          const timingParams = {
+            ...params,
+            OutputFormat: 'json',
+          };
+          const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
+          const timingData = timingResult.AudioStream.toString('utf-8');
+          
+          // Parse timing marks (each line is a JSON object)
+          const wordTimings: WordTiming[] = [];
+          const lines = timingData.split('\n').filter((line: string) => line.trim());
+          
+          for (const line of lines) {
+            try {
+              const mark = JSON.parse(line);
+              if (mark.type === 'word') {
+                wordTimings.push({
+                  word: mark.value,
+                  startTime: mark.time / 1000, // Convert ms to seconds
+                  endTime: (mark.time + mark.duration) / 1000,
+                  scriptBlockId: 'unknown', // Will be set later
+                });
+              }
+            } catch (e) {
+              logger.warn('Failed to parse timing mark', { line: line as string });
+            }
           }
-        } catch (e) {
-          logger.warn('Failed to parse timing mark', { line: line as string });
+
+          // Calculate duration from last word timing
+          const duration = wordTimings.length > 0
+            ? wordTimings[wordTimings.length - 1].endTime
+            : 0;
+
+          return {
+            audioBuffer,
+            duration,
+            wordTimings,
+          };
+        } catch (error) {
+          logger.error('AWS Polly synthesis failed', { error });
+          throw new ExternalServiceError(
+            `TTS synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
+            'aws-polly',
+            { error }
+          );
         }
-      }
-
-      // Calculate duration from last word timing
-      const duration = wordTimings.length > 0
-        ? wordTimings[wordTimings.length - 1].endTime
-        : 0;
-
-      return {
-        audioBuffer,
-        duration,
-        wordTimings,
-      };
-    } catch (error) {
-      logger.error('AWS Polly synthesis failed', { error });
-      throw new Error(`TTS synthesis failed: ${error}`);
-    }
+      },
+      { maxAttempts: 3, initialDelayMs: 1000 },
+      { failureThreshold: 5, timeout: 60000 }
+    );
   }
 }
 

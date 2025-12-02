@@ -2,105 +2,56 @@
 import { randomUUID } from 'crypto';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
-import { ErrorResponse, UploadError } from '../models/errors';
+import { ErrorResponse } from '../models/errors';
+import { 
+  ValidationError, 
+  validateFileSize as validateFileSizeUtil, 
+  validatePDFFormat as validatePDFFormatUtil,
+  AppError 
+} from '../utils/errors';
 import { Job, JobStatus, StageStatus } from '../models/job';
 import { uploadPDF } from './s3';
 import { createJob, createContent } from './dynamodb';
 import { triggerAnalysis } from './eventbridge';
-
-// PDF magic bytes for validation
-const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
 
 // ============================================================================
 // Validation Functions
 // ============================================================================
 
 /**
- * Validates file size against the configured maximum
- * @param fileSize Size of the file in bytes
- * @returns Error response if validation fails, null otherwise
- */
-export function validateFileSize(fileSize: number): UploadError | null {
-  const maxSizeBytes = config.processing.maxPdfSizeMB * 1024 * 1024;
-  
-  if (fileSize > maxSizeBytes) {
-    logger.warn('File size exceeds limit', { 
-      fileSize, 
-      maxSize: maxSizeBytes,
-      maxSizeMB: config.processing.maxPdfSizeMB 
-    });
-    
-    return {
-      error: `File size exceeds maximum allowed size of ${config.processing.maxPdfSizeMB}MB`,
-      code: 'FILE_TOO_LARGE',
-    };
-  }
-  
-  return null;
-}
-
-/**
- * Validates PDF format by checking magic bytes
- * @param buffer File buffer to validate
- * @returns Error response if validation fails, null otherwise
- */
-export function validatePDFFormat(buffer: Buffer): UploadError | null {
-  // Check if buffer is empty
-  if (buffer.length === 0) {
-    logger.warn('Empty file provided');
-    return {
-      error: 'File is empty',
-      code: 'INVALID_PDF',
-    };
-  }
-  
-  // Check if buffer has enough bytes for magic number
-  if (buffer.length < PDF_MAGIC_BYTES.length) {
-    logger.warn('File too small to be a valid PDF', { size: buffer.length });
-    return {
-      error: 'File is too small to be a valid PDF',
-      code: 'INVALID_PDF',
-    };
-  }
-  
-  // Check magic bytes
-  for (let i = 0; i < PDF_MAGIC_BYTES.length; i++) {
-    if (buffer[i] !== PDF_MAGIC_BYTES[i]) {
-      logger.warn('Invalid PDF magic bytes', { 
-        expected: PDF_MAGIC_BYTES, 
-        actual: Array.from(buffer.slice(0, PDF_MAGIC_BYTES.length)) 
-      });
-      return {
-        error: 'File is not a valid PDF document',
-        code: 'INVALID_PDF',
-      };
-    }
-  }
-  
-  return null;
-}
-
-/**
  * Validates the complete upload request
  * @param buffer File buffer
  * @param filename Original filename
- * @returns Error response if validation fails, null otherwise
+ * @throws ValidationError if validation fails
  */
-export function validateUpload(buffer: Buffer, filename: string): UploadError | null {
+export function validateUpload(buffer: Buffer, filename: string): void {
+  const maxSizeBytes = config.processing.maxPdfSizeMB * 1024 * 1024;
+  
   // Validate file size
-  const sizeError = validateFileSize(buffer.length);
-  if (sizeError) {
-    return sizeError;
+  try {
+    validateFileSizeUtil(buffer.length, maxSizeBytes);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      logger.warn('File size validation failed', { 
+        fileSize: buffer.length, 
+        maxSize: maxSizeBytes,
+        filename 
+      });
+    }
+    throw error;
   }
   
   // Validate PDF format
-  const formatError = validatePDFFormat(buffer);
-  if (formatError) {
-    return formatError;
+  try {
+    validatePDFFormatUtil(buffer);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      logger.warn('PDF format validation failed', { filename });
+    }
+    throw error;
   }
   
   logger.info('Upload validation passed', { filename, size: buffer.length });
-  return null;
 }
 
 /**
@@ -109,18 +60,23 @@ export function validateUpload(buffer: Buffer, filename: string): UploadError | 
  * @param jobId Optional job ID if available
  * @returns Formatted error response
  */
-export function generateErrorResponse(error: UploadError | Error, jobId?: string): ErrorResponse {
-  if ('code' in error) {
-    // It's an UploadError
+export function generateErrorResponse(error: Error, jobId?: string): ErrorResponse {
+  if (error instanceof AppError) {
+    return error.toResponse(jobId);
+  }
+  
+  // Handle legacy UploadError format
+  if ('code' in error && typeof (error as any).code === 'string') {
+    const uploadError = error as any;
     return {
-      error: error.error,
-      code: error.code,
+      error: uploadError.error || error.message,
+      code: uploadError.code,
       jobId,
-      retryable: error.code === 'UPLOAD_FAILED',
+      retryable: uploadError.code === 'UPLOAD_FAILED',
     };
   }
   
-  // It's a generic Error
+  // Generic error
   return {
     error: error.message || 'An unexpected error occurred',
     code: 'UPLOAD_FAILED',
@@ -149,16 +105,14 @@ export interface UploadResponse {
  * Handles the complete PDF upload process
  * @param request Upload request containing file buffer and metadata
  * @returns Upload response with job ID
- * @throws Error if upload fails
+ * @throws ValidationError for validation failures
+ * @throws AppError for processing failures
  */
 export async function handleUpload(request: UploadRequest): Promise<UploadResponse> {
   const { file, filename, agentId } = request;
   
-  // Validate the upload
-  const validationError = validateUpload(file, filename);
-  if (validationError) {
-    throw validationError;
-  }
+  // Validate the upload (throws ValidationError if invalid)
+  validateUpload(file, filename);
   
   // Generate unique job ID
   const jobId = randomUUID();
@@ -206,17 +160,18 @@ export async function handleUpload(request: UploadRequest): Promise<UploadRespon
   } catch (error) {
     logger.error('Upload failed', { jobId, error });
     
-    // If it's already an UploadError, rethrow it
-    if (error && typeof error === 'object' && 'code' in error) {
+    // If it's already an AppError, rethrow it
+    if (error instanceof AppError) {
       throw error;
     }
     
-    // Otherwise, wrap it in an UPLOAD_FAILED error
-    const uploadError: UploadError = {
-      error: error instanceof Error ? error.message : 'Upload failed',
-      code: 'UPLOAD_FAILED',
-    };
-    throw uploadError;
+    // Otherwise, wrap it in a ProcessingError
+    throw new AppError(
+      error instanceof Error ? error.message : 'Upload failed',
+      'UPLOAD_FAILED',
+      500,
+      true
+    );
   }
 }
 
