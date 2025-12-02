@@ -20,33 +20,53 @@ The PDF Lecture Service is a serverless application that analyzes scientific PDF
 - Docker and Docker Compose (for local development)
 - AWS account (for production deployment)
 
-## Getting Started
+## Quick Start
 
 ### Installation
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd pdf-lecture-service
+
 # Install dependencies
 npm install
-```
 
-### Local Development Setup
-
-1. Copy the environment template:
-```bash
+# Set up environment
 cp .env.example .env
 ```
 
-2. Start LocalStack (S3 and DynamoDB emulation):
-```bash
-docker-compose up -d
-```
+### Local Development
 
-3. Start the development server:
 ```bash
+# Start LocalStack (AWS services emulation)
+docker-compose up -d
+
+# Start the development server
 npm run dev
 ```
 
 The server will be available at `http://localhost:3000`.
+
+### Your First Lecture
+
+```bash
+# 1. Upload a PDF
+curl -X POST http://localhost:3000/api/upload \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file": "base64-encoded-pdf-content",
+    "filename": "paper.pdf"
+  }'
+
+# 2. Check status (save the jobId from step 1)
+curl http://localhost:3000/api/status/{jobId}
+
+# 3. When status is "completed", access the player
+open http://localhost:3000/api/player/{jobId}
+```
+
+For detailed instructions, see the [User Guide](docs/USER_GUIDE.md).
 
 ### Testing
 
@@ -96,18 +116,18 @@ The system uses a multi-stage pipeline architecture:
 
 Each stage is implemented as an independent serverless function for scalability.
 
-## API Endpoints
+## Documentation
 
-### Local Development
+- **[User Guide](docs/USER_GUIDE.md)** - Complete guide for using the service
+- **[API Documentation](docs/API.md)** - Detailed API reference with examples
+- **[Deployment Guide](DEPLOYMENT.md)** - Local setup and production deployment
 
-- `GET /health` - Health check
-- `POST /api/upload` - Upload PDF
-- `GET /api/status/:jobId` - Query job status
-- `GET /api/agents` - List lecture agents
-- `POST /api/agents` - Create lecture agent
-- `GET /api/player/:jobId` - Playback interface
+## Quick Links
 
-Additional endpoints will be added as features are implemented.
+- [Upload a PDF](#uploading-pdfs) - Get started with your first lecture
+- [Create Agents](docs/USER_GUIDE.md#managing-lecture-agents) - Customize presenter personalities
+- [Immersive Reader](docs/USER_GUIDE.md#using-the-immersive-reader) - Synchronized playback experience
+- [API Reference](docs/API.md) - Complete endpoint documentation
 
 ## Testing Strategy
 
