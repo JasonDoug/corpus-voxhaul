@@ -2,6 +2,11 @@
 import { handleUpload, UploadRequest, UploadResponse, generateErrorResponse } from '../services/upload';
 import { ErrorResponse } from '../models/errors';
 import { logger } from '../utils/logger';
+import { metrics, RequestMetrics } from '../utils/metrics';
+import { randomUUID } from 'crypto';
+
+// Initialize request metrics tracker
+const requestMetrics = new RequestMetrics();
 
 /**
  * Lambda handler for PDF upload
@@ -9,8 +14,17 @@ import { logger } from '../utils/logger';
  * creates a job record, and triggers the analysis pipeline.
  */
 export async function uploadHandler(event: any): Promise<any> {
+  // Generate correlation ID for request tracking
+  const correlationId = event.requestContext?.requestId || randomUUID();
+  logger.setCorrelationId(correlationId);
+  logger.setFunctionName('UploadFunction');
+  
+  // Start timing the request
+  const timerId = metrics.startTimer('UploadFunctionDuration', { function: 'upload' });
+  
   try {
-    logger.info('Upload function invoked');
+    logger.info('Upload function invoked', { correlationId });
+    requestMetrics.incrementRequest('upload');
     
     // Parse the request
     // In a real Lambda with API Gateway, the file would come from event.body
@@ -21,17 +35,29 @@ export async function uploadHandler(event: any): Promise<any> {
       agentId: event.agentId,
     };
     
+    // Track file size
+    if (request.file) {
+      metrics.recordSize('UploadFileSize', request.file.length, { function: 'upload' });
+    }
+    
     // Handle the upload
     const response: UploadResponse = await handleUpload(request);
     
-    logger.info('Upload completed successfully', { jobId: response.jobId });
+    logger.info('Upload completed successfully', { jobId: response.jobId, correlationId });
+    requestMetrics.incrementSuccess('upload');
+    metrics.stopTimer(timerId);
     
     return {
       statusCode: 200,
       body: JSON.stringify(response),
     };
   } catch (error) {
-    logger.error('Upload handler error', { error });
+    logger.error('Upload handler error', { error, correlationId });
+    
+    const errorType = (error as any).code || 'UnknownError';
+    requestMetrics.incrementError('upload', errorType);
+    metrics.recordCount('UploadError', 1, { function: 'upload', errorType });
+    metrics.stopTimer(timerId);
     
     const errorResponse: ErrorResponse = generateErrorResponse(error as any);
     
