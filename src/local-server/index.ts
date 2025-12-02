@@ -31,6 +31,9 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // API routes will be added in subsequent tasks
 // POST /api/upload - Upload function wrapper
 // POST /api/analyze/:jobId - Analysis function wrapper
@@ -40,7 +43,26 @@ app.get('/health', (_req: Request, res: Response) => {
 // GET /api/status/:jobId - Status query wrapper
 // GET /api/agents - List agents wrapper
 // POST /api/agents - Create agent wrapper
-// GET /api/player/:jobId - Serve playback interface
+
+// Playback interface endpoint
+app.get('/api/player/:jobId', (req: Request, res: Response) => {
+  res.sendFile('player.html', { root: 'public' });
+});
+
+// Playback data endpoint
+app.get('/api/playback/:jobId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { jobId } = req.params;
+    
+    // Import dynamically to avoid circular dependencies
+    const { getPlaybackData } = await import('../services/status');
+    const playbackData = await getPlaybackData(jobId);
+    
+    res.json(playbackData);
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Error handling middleware
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Immersive Reader - PDF Lecture Player</title>
+  <link rel="stylesheet" href="/player.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+  <div class="player-container">
+    <!-- Header -->
+    <header class="player-header">
+      <h1>Immersive Reader</h1>
+      <div class="job-info">
+        <span id="job-id"></span>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="player-main">
+      <!-- PDF Viewer Pane -->
+      <section class="pdf-pane">
+        <div class="pdf-controls">
+          <button id="prev-page" aria-label="Previous page">←</button>
+          <span class="page-info">
+            <span id="current-page">1</span> / <span id="total-pages">1</span>
+          </span>
+          <button id="next-page" aria-label="Next page">→</button>
+        </div>
+        <div class="pdf-viewer">
+          <canvas id="pdf-canvas"></canvas>
+          <div id="pdf-highlight-layer"></div>
+        </div>
+      </section>
+
+      <!-- Script Viewer Pane -->
+      <section class="script-pane">
+        <div class="script-header">
+          <h2>Lecture Script</h2>
+        </div>
+        <div class="script-viewer" id="script-viewer">
+          <!-- Script content will be dynamically inserted -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Audio Player Controls -->
+    <footer class="player-footer">
+      <div class="audio-controls">
+        <button id="play-pause" class="control-btn" aria-label="Play/Pause">
+          <span class="play-icon">▶</span>
+          <span class="pause-icon" style="display: none;">⏸</span>
+        </button>
+        
+        <div class="time-display">
+          <span id="current-time">0:00</span>
+        </div>
+
+        <div class="progress-container">
+          <input 
+            type="range" 
+            id="seek-bar" 
+            class="seek-bar" 
+            min="0" 
+            max="100" 
+            value="0"
+            aria-label="Seek"
+          >
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+
+        <div class="time-display">
+          <span id="total-time">0:00</span>
+        </div>
+
+        <audio id="audio-player" preload="auto"></audio>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/player.js"></script>
+</body>
+</html>

@@ -296,58 +296,58 @@ ty 8: Formula explanation**
     - Test error handling for invalid job IDs
     - _Requirements: 1.5_
 
-- [ ] 13. Implement Immersive Reader playback interface
-  - [ ] 13.1 Create frontend HTML/CSS structure
+- [x] 13. Implement Immersive Reader playback interface
+  - [x] 13.1 Create frontend HTML/CSS structure
     - Design split-pane layout (PDF viewer | Script viewer)
     - Implement audio player controls
     - Style highlighting for script text
     - Add responsive design for different screen sizes
     - _Requirements: 7.1, 7.2_
-  - [ ] 13.2 Integrate PDF viewer
+  - [x] 13.2 Integrate PDF viewer
     - Use PDF.js or similar library for PDF rendering
     - Implement page navigation
     - Implement PDF region highlighting
     - _Requirements: 7.1, 7.4_
-  - [ ] 13.3 Implement script display and highlighting
+  - [x] 13.3 Implement script display and highlighting
     - Render lecture script with proper formatting
     - Implement word-level highlighting
     - Implement auto-scroll to keep highlighted text visible
     - _Requirements: 7.2, 7.3, 8.3_
-  - [ ] 13.4 Implement audio synchronization
+  - [x] 13.4 Implement audio synchronization
     - Load audio file and word timing data
     - Attach timeupdate event listener to audio element
     - Implement binary search for current word lookup
     - Update highlighting based on current playback time
     - Update PDF page based on current script block
     - _Requirements: 7.3, 7.4, 8.1_
-  - [ ] 13.5 Implement playback controls
+  - [x] 13.5 Implement playback controls
     - Implement play/pause functionality
     - Implement seek functionality
     - Update highlighting on seek operations
     - Ensure synchronization on all playback state changes
     - _Requirements: 7.5_
-  - [ ] 13.6 Write property test for highlight synchronization
+  - [x] 13.6 Write property test for highlight synchronization
     - **Property 25: Highlight synchronization**
     - **Validates: Requirements 7.3, 8.1**
-  - [ ] 13.7 Write property test for single highlight invariant
+  - [x] 13.7 Write property test for single highlight invariant
     - **Property 26: Single highlight invariant**
     - **Validates: Requirements 8.2**
-  - [ ] 13.8 Write property test for PDF page synchronization
+  - [x] 13.8 Write property test for PDF page synchronization
     - **Property 27: PDF page synchronization**
     - **Validates: Requirements 7.4**
-  - [ ] 13.9 Write property test for seek consistency
+  - [x] 13.9 Write property test for seek consistency
     - **Property 28: Seek consistency**
     - **Validates: Requirements 7.5**
-  - [ ] 13.10 Write property test for auto-scroll behavior
+  - [x] 13.10 Write property test for auto-scroll behavior
     - **Property 29: Auto-scroll behavior**
     - **Validates: Requirements 8.3**
-  - [ ] 13.11 Write property test for PDF element highlighting
+  - [x] 13.11 Write property test for PDF element highlighting
     - **Property 30: PDF element highlighting**
     - **Validates: Requirements 8.4**
-  - [ ] 13.12 Write property test for long-duration synchronization accuracy
+  - [x] 13.12 Write property test for long-duration synchronization accuracy
     - **Property 31: Long-duration synchronization accuracy**
     - **Validates: Requirements 8.5**
-  - [ ] 13.13 Write unit tests for playback interface
+  - [x] 13.13 Write unit tests for playback interface
     - Test audio player initialization
     - Test highlighting updates at specific timestamps
     - Test seek to various positions
