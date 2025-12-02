@@ -285,13 +285,13 @@ ty 8: Formula explanation**
 - [x] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement Status Query function
-  - [ ] 12.1 Create status query handler
+- [x] 12. Implement Status Query function
+  - [x] 12.1 Create status query handler
     - Implement job status retrieval by job ID
     - Return job status, stage progress, and error information
     - Handle non-existent job IDs
     - _Requirements: 1.5_
-  - [ ] 12.2 Write unit tests for status queries
+  - [x] 12.2 Write unit tests for status queries
     - Test status retrieval for various job states
     - Test error handling for invalid job IDs
     - _Requirements: 1.5_
