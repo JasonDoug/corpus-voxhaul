@@ -164,17 +164,17 @@ ty 8: Formula explanation**
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement Content Segmenter function
-  - [ ] 8.1 Create segmentation prompt for LLM
+  - [x] 8.1 Create segmentation prompt for LLM
     - Design prompt that instructs LLM to identify topics
     - Include instructions for grouping related concepts
     - Request structured output with segment titles and boundaries
     - _Requirements: 3.1, 3.2_
-  - [ ] 8.2 Implement dependency analysis
+  - [x] 8.2 Implement dependency analysis
     - Parse LLM output to identify prerequisite relationships
     - Build dependency graph between segments
     - Implement topological sort for segment ordering
     - _Requirements: 3.4_
-  - [ ] 8.3 Implement segmentation handler
+  - [x] 8.3 Implement segmentation handler
     - Retrieve extracted content from database
     - Send content to LLM for segmentation
     - Process LLM response into SegmentedContent structure
@@ -183,16 +183,16 @@ ty 8: Formula explanation**
     - Update job status to 'segmenting' → 'generating_script'
     - Trigger Script Generator function
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
-  - [ ] 8.4 Write property test for segmentation completeness
+  - [x] 8.4 Write property test for segmentation completeness
     - **Property 9: Segmentation completeness**
     - **Validates: Requirements 3.1, 3.5**
-  - [ ] 8.5 Write property test for prerequisite ordering
+  - [x] 8.5 Write property test for prerequisite ordering
     - **Property 11: Prerequisite ordering**
     - **Validates: Requirements 3.4**
-  - [ ] 8.6 Write property test for coherent grouping
+  - [x] 8.6 Write property test for coherent grouping
     - **Property 12: Coherent grouping**
     - **Validates: Requirements 3.2**
-  - [ ] 8.7 Write unit tests for segmentation logic
+  - [x] 8.7 Write unit tests for segmentation logic
     - Test topological sort with various dependency graphs
     - Test handling of circular dependencies
     - Test segmentation with single-topic content
