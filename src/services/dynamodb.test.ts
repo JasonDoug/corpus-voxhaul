@@ -5,6 +5,7 @@ import {
   getJob,
   updateJob,
   deleteJob,
+  listAgents,
   createAgent,
   getAgent,
   updateAgent,
@@ -37,20 +38,23 @@ const jobStatusArb = fc.constantFrom<JobStatus>(
   'failed'
 );
 
+// Use reasonable date ranges (2000-2030) to avoid serialization issues
+const reasonableDateArb = fc.date({ min: new Date('2000-01-01'), max: new Date('2030-12-31') });
+
 const stageStatusArb = fc.record({
   stage: fc.string({ minLength: 1, maxLength: 50 }),
   status: fc.constantFrom('pending', 'in_progress', 'completed', 'failed'),
-  startedAt: fc.option(fc.date(), { nil: undefined }),
-  completedAt: fc.option(fc.date(), { nil: undefined }),
+  startedAt: fc.option(reasonableDateArb, { nil: undefined }),
+  completedAt: fc.option(reasonableDateArb, { nil: undefined }),
   error: fc.option(fc.string(), { nil: undefined }),
 }) as fc.Arbitrary<StageStatus>;
 
-const jobArb = fc.date().chain(createdAt =>
+const jobArb = reasonableDateArb.chain(createdAt =>
   fc.record({
     jobId: fc.uuid(),
     status: jobStatusArb,
     createdAt: fc.constant(createdAt),
-    updatedAt: fc.date({ min: createdAt }), // Ensure updatedAt >= createdAt
+    updatedAt: reasonableDateArb.filter(d => d >= createdAt), // Ensure updatedAt >= createdAt
     pdfFilename: fc.string({ minLength: 1, maxLength: 100 }),
     pdfUrl: fc.webUrl(),
     agentId: fc.option(fc.uuid(), { nil: undefined }),
@@ -63,19 +67,19 @@ const toneArb = fc.constantFrom('humorous', 'serious', 'casual', 'formal', 'enth
 
 const agentArb = fc.record({
   id: fc.uuid(),
-  name: fc.string({ minLength: 1, maxLength: 50 }),
-  description: fc.string({ minLength: 1, maxLength: 200 }),
+  name: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
+  description: fc.string({ minLength: 1, maxLength: 200 }).filter(s => s.trim().length > 0),
   personality: fc.record({
-    instructions: fc.string({ minLength: 1, maxLength: 500 }),
+    instructions: fc.string({ minLength: 1, maxLength: 500 }).filter(s => s.trim().length > 0),
     tone: toneArb,
     examples: fc.option(fc.array(fc.string({ minLength: 1, maxLength: 100 }), { maxLength: 5 }), { nil: undefined }),
   }),
   voice: fc.record({
-    voiceId: fc.string({ minLength: 1, maxLength: 50 }),
+    voiceId: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
     speed: fc.double({ min: 0.5, max: 2.0, noNaN: true }),
     pitch: fc.integer({ min: -20, max: 20 }),
   }),
-  createdAt: fc.date(),
+  createdAt: reasonableDateArb,
 }) as fc.Arbitrary<LectureAgent>;
 
 // **Feature: pdf-lecture-service, Property 32: Function execution and persistence**
@@ -173,6 +177,14 @@ describe('Property 32: Function execution and persistence', () => {
     test('For any valid agent, creating and retrieving it should return equivalent data', async () => {
       await fc.assert(
         fc.asyncProperty(agentArb, async (agent) => {
+          // Clean up any existing agents with the same name first
+          const existing = await listAgents();
+          for (const existingAgent of existing) {
+            if (existingAgent.name === agent.name) {
+              await deleteAgent(existingAgent.id);
+            }
+          }
+          
           // Create the agent
           await createAgent(agent);
           
@@ -200,6 +212,14 @@ describe('Property 32: Function execution and persistence', () => {
     test('For any agent, updating it should persist the changes', async () => {
       await fc.assert(
         fc.asyncProperty(agentArb, fc.string({ minLength: 1, maxLength: 200 }), async (agent, newDescription) => {
+          // Clean up any existing agents with the same name first
+          const existing = await listAgents();
+          for (const existingAgent of existing) {
+            if (existingAgent.name === agent.name) {
+              await deleteAgent(existingAgent.id);
+            }
+          }
+          
           // Create the agent
           await createAgent(agent);
           

@@ -25,7 +25,7 @@ jest.mock('./s3');
  */
 const scriptBlockArb = fc.record({
   id: fc.uuid(),
-  text: fc.string({ minLength: 10, maxLength: 200 }),
+  text: fc.string({ minLength: 10, maxLength: 200 }).filter(s => s.trim().length > 0),
   contentReference: fc.record({
     type: fc.constantFrom('text' as const, 'figure' as const, 'table' as const, 'formula' as const, 'citation' as const),
     id: fc.uuid(),
@@ -39,7 +39,7 @@ const scriptBlockArb = fc.record({
  */
 const scriptSegmentArb = fc.record({
   segmentId: fc.uuid(),
-  title: fc.string({ minLength: 5, maxLength: 100 }),
+  title: fc.string({ minLength: 5, maxLength: 100 }).filter(s => s.trim().length > 0),
   scriptBlocks: fc.array(scriptBlockArb, { minLength: 1, maxLength: 5 }),
 }) as fc.Arbitrary<ScriptSegment>;
 

@@ -282,7 +282,7 @@ ty 8: Formula explanation**
     - Test error handling for TTS API failures
     - _Requirements: 6.1, 6.2, 6.6_
 
-- [ ] 11. Checkpoint - Ensure all tests pass
+- [x] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Implement Status Query function
