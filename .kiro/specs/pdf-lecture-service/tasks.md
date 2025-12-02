@@ -452,7 +452,7 @@ ty 8: Formula explanation**
     - Set up alarms for error rates and timeouts
     - _Requirements: 9.2_
 
-- [ ] 18. Final Checkpoint - Ensure all tests pass
+- [x] 18. Final Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 19. Create documentation
