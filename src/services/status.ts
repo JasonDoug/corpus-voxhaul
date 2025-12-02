@@ -89,8 +89,8 @@ export async function getPlaybackData(jobId: string): Promise<PlaybackState> {
     jobId: job.jobId,
     pdfUrl: job.pdfUrl,
     script: content.script,
-    audioUrl: content.audioUrl,
-    wordTimings: content.wordTimings,
+    audioUrl: content.audioUrl || '',
+    wordTimings: content.wordTimings || [],
     currentTime: 0,
     isPlaying: false,
   };

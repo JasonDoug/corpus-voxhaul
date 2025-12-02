@@ -354,14 +354,14 @@ ty 8: Formula explanation**
     - Test edge cases (beginning, end of audio)
     - _Requirements: 7.3, 7.4, 7.5, 8.1_
 
-- [ ] 14. Implement local development server
-  - [ ] 14.1 Create Express.js server wrapper
+- [x] 14. Implement local development server
+  - [x] 14.1 Create Express.js server wrapper
     - Set up Express application
     - Create HTTP endpoints for each serverless function
     - Implement request/response mapping to Lambda function signatures
     - Add CORS support for frontend development
     - _Requirements: 10.1, 10.2_
-  - [ ] 14.2 Implement local endpoint handlers
+  - [x] 14.2 Implement local endpoint handlers
     - POST /api/upload - Upload function wrapper
     - POST /api/analyze/:jobId - Analysis function wrapper
     - POST /api/segment/:jobId - Segmentation function wrapper
@@ -372,22 +372,22 @@ ty 8: Formula explanation**
     - POST /api/agents - Create agent wrapper
     - GET /api/player/:jobId - Serve playback interface
     - _Requirements: 10.2, 10.3_
-  - [ ] 14.3 Write property test for local-serverless interface compatibility
+  - [x] 14.3 Write property test for local-serverless interface compatibility
     - **Property 35: Local-serverless interface compatibility**
     - **Validates: Requirements 10.2, 10.3**
-  - [ ] 14.4 Write integration tests for local endpoints
+  - [x] 14.4 Write integration tests for local endpoints
     - Test complete pipeline from upload to completion
     - Test agent CRUD operations
     - Test error handling across endpoints
     - _Requirements: 10.4_
 
-- [ ] 15. Implement serverless deployment configuration
-  - [ ] 15.1 Create Lambda function wrappers
+- [x] 15. Implement serverless deployment configuration
+  - [x] 15.1 Create Lambda function wrappers
     - Wrap each service function in Lambda handler format
     - Implement event parsing and response formatting
     - Add error handling and logging
     - _Requirements: 9.1, 9.2_
-  - [ ] 15.2 Create infrastructure-as-code configuration
+  - [x] 15.2 Create infrastructure-as-code configuration
     - Define Lambda functions (memory, timeout, runtime)
     - Define API Gateway endpoints
     - Define DynamoDB tables with auto-scaling
@@ -396,15 +396,15 @@ ty 8: Formula explanation**
     - Define EventBridge rules for function triggering
     - Use AWS SAM, Serverless Framework, or Terraform
     - _Requirements: 9.1, 9.3_
-  - [ ] 15.3 Implement asynchronous processing
+  - [x] 15.3 Implement asynchronous processing
     - Use EventBridge or SQS for function-to-function communication
     - Implement immediate job ID return for long operations
     - Ensure functions don't block on downstream processing
     - _Requirements: 9.4_
-  - [ ] 15.4 Write property test for asynchronous processing support
+  - [x] 15.4 Write property test for asynchronous processing support
     - **Property 33: Asynchronous processing support**
     - **Validates: Requirements 9.4**
-  - [ ] 15.5 Write deployment tests
+  - [x] 15.5 Write deployment tests
     - Test Lambda function packaging
     - Test environment variable configuration
     - Test IAM permissions

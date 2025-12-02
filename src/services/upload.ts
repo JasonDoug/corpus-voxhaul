@@ -6,6 +6,7 @@ import { ErrorResponse, UploadError } from '../models/errors';
 import { Job, JobStatus, StageStatus } from '../models/job';
 import { uploadPDF } from './s3';
 import { createJob, createContent } from './dynamodb';
+import { triggerAnalysis } from './eventbridge';
 
 // PDF magic bytes for validation
 const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
@@ -187,9 +188,15 @@ export async function handleUpload(request: UploadRequest): Promise<UploadRespon
     await createContent(jobId);
     logger.info('Content record created', { jobId });
     
-    // TODO: Trigger Content Analysis function (will be implemented in task 6)
-    // For now, we just log that the job is queued
-    logger.info('Job queued for analysis', { jobId });
+    // Trigger Content Analysis function asynchronously
+    // In production, this publishes an event to EventBridge
+    // In local mode, the local server will handle this synchronously
+    if (config.nodeEnv === 'production') {
+      await triggerAnalysis(jobId);
+      logger.info('Analysis triggered asynchronously', { jobId });
+    } else {
+      logger.info('Job queued for analysis (local mode)', { jobId });
+    }
     
     return {
       jobId,

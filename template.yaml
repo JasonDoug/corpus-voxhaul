@@ -1,0 +1,414 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: PDF Lecture Service - Serverless application for converting scientific PDFs into audio lectures
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 1024
+    Timeout: 300
+    Environment:
+      Variables:
+        DYNAMODB_TABLE_JOBS: !Ref JobsTable
+        DYNAMODB_TABLE_AGENTS: !Ref AgentsTable
+        DYNAMODB_TABLE_CONTENT: !Ref ContentTable
+        S3_BUCKET_PDFS: !Ref PDFBucket
+        S3_BUCKET_AUDIO: !Ref AudioBucket
+        EVENT_BUS_NAME: !Ref EventBus
+        NODE_ENV: production
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment stage
+
+Resources:
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: true
+
+  # Lambda Functions
+  UploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: upload.uploadHandler
+      Description: Accepts PDF uploads and initiates processing pipeline
+      Timeout: 60
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref PDFBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        UploadApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /upload
+            Method: POST
+
+  AnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: analyzer.analyzerHandler
+      Description: Analyzes PDF content and extracts all elements
+      Timeout: 300
+      MemorySize: 2048
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref PDFBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        AnalyzeEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - JobCreated
+        AnalyzeApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /analyze/{jobId}
+            Method: POST
+
+  SegmenterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: segmenter.segmenterHandler
+      Description: Segments content into logical topics
+      Timeout: 300
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        SegmentEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - AnalysisCompleted
+        SegmentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /segment/{jobId}
+            Method: POST
+
+  ScriptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: script.scriptHandler
+      Description: Generates lecture script with personality
+      Timeout: 300
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AgentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ScriptEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - SegmentationCompleted
+        ScriptApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /script/{jobId}
+            Method: POST
+
+  AudioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: audio.audioHandler
+      Description: Synthesizes audio from lecture script
+      Timeout: 600
+      MemorySize: 2048
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref AudioBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
+      Events:
+        AudioEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - ScriptGenerationCompleted
+        AudioApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /audio/{jobId}
+            Method: POST
+
+  StatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/functions/
+      Handler: status.statusHandler
+      Description: Queries job status
+      Timeout: 30
+      MemorySize: 512
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobsTable
+      Events:
+        StatusApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /status/{jobId}
+            Method: GET
+
+  # DynamoDB Tables
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-jobs'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  AgentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-agents'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  ContentTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-content'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # S3 Buckets
+  PDFBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-pdfs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldPDFs
+            Status: Enabled
+            ExpirationInDays: 30
+
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-audio-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldAudio
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # EventBridge Event Bus
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-events'
+
+  # IAM Role for Lambda Functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !GetAtt AgentsTable.Arn
+                  - !GetAtt ContentTable.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub '${PDFBucket.Arn}/*'
+                  - !Sub '${AudioBucket.Arn}/*'
+        - PolicyName: EventBridgeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !GetAtt EventBus.Arn
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  PDFBucketName:
+    Description: S3 bucket for PDF storage
+    Value: !Ref PDFBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-PDFBucket'
+
+  AudioBucketName:
+    Description: S3 bucket for audio storage
+    Value: !Ref AudioBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AudioBucket'
+
+  EventBusName:
+    Description: EventBridge event bus name
+    Value: !Ref EventBus
+    Export:
+      Name: !Sub '${AWS::StackName}-EventBus'
+
+  JobsTableName:
+    Description: DynamoDB table for jobs
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-JobsTable'
+
+  AgentsTableName:
+    Description: DynamoDB table for agents
+    Value: !Ref AgentsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentsTable'
+
+  ContentTableName:
+    Description: DynamoDB table for content
+    Value: !Ref ContentTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ContentTable'

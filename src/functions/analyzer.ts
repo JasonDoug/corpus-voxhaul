@@ -1,8 +1,10 @@
 // Analyzer function - Serverless function wrapper
 import { analyzeContent } from '../services/analyzer';
 import { getJob, updateJob, getContent, createContent, updateContent } from '../services/dynamodb';
+import { triggerSegmentation } from '../services/eventbridge';
 import { ErrorResponse } from '../models/errors';
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 
 /**
  * Lambda handler for content analysis
@@ -67,8 +69,12 @@ export async function analyzerHandler(event: any): Promise<any> {
     
     logger.info('Content analysis completed successfully', { jobId });
     
-    // In a real serverless environment, we would trigger the segmenter function here
-    // For now, return success
+    // Trigger segmentation asynchronously in production
+    if (config.nodeEnv === 'production') {
+      await triggerSegmentation(jobId);
+      logger.info('Segmentation triggered asynchronously', { jobId });
+    }
+    
     return {
       statusCode: 200,
       body: JSON.stringify({

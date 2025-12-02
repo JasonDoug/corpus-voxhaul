@@ -7,6 +7,9 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
   localMode: process.env.LOCAL_MODE === 'true',
+  isLocal: process.env.NODE_ENV !== 'production',
+  awsRegion: process.env.AWS_REGION || 'us-east-1',
+  eventBusName: process.env.EVENT_BUS_NAME || 'pdf-lecture-service-events',
   
   aws: {
     region: process.env.AWS_REGION || 'us-east-1',

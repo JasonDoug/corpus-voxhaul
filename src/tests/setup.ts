@@ -15,3 +15,12 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
 };
+
+// Mock DOM APIs required by pdf-parse
+(global as any).DOMMatrix = class DOMMatrix {
+  constructor() {}
+};
+
+(global as any).Path2D = class Path2D {
+  constructor() {}
+};

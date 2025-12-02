@@ -6,3 +6,4 @@ export * from './segmenter';
 export * from './script-generator';
 export * from './audio-synthesizer';
 export * from './status';
+export * from './eventbridge';
