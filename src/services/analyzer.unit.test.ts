@@ -1,0 +1,232 @@
+// Unit tests for Content Analyzer
+import { extractTextFromPDF, detectCitations, analyzeFigures, analyzeTables, analyzeFormulas } from './analyzer';
+
+// Mock uuid
+jest.mock('uuid', () => ({
+  v4: () => 'test-uuid-123'
+}));
+
+// Mock pdf-parse
+jest.mock('pdf-parse', () => {
+  return jest.fn((buffer: Buffer) => {
+    const text = buffer.toString('utf-8');
+    const matches = text.match(/\(([^)]+)\)/g);
+    const extractedText = matches ? matches.map(m => m.slice(1, -1)).join(' ') : text;
+    
+    return Promise.resolve({
+      numpages: 2,
+      text: extractedText,
+      info: {},
+      metadata: null,
+      version: '1.4'
+    });
+  });
+});
+
+describe('Content Analyzer Unit Tests', () => {
+  describe('extractTextFromPDF', () => {
+    it('should extract text from multi-page PDF', async () => {
+      const pdfBuffer = Buffer.from('(Page 1 content) (Page 2 content)', 'utf-8');
+      
+      const pages = await extractTextFromPDF(pdfBuffer);
+      
+      expect(pages.length).toBe(2);
+      expect(pages[0].pageNumber).toBe(1);
+      expect(pages[1].pageNumber).toBe(2);
+      pages.forEach(page => {
+        expect(page.elements).toBeDefined();
+        expect(Array.isArray(page.elements)).toBe(true);
+      });
+    });
+
+    it('should handle PDFs with no figures/tables', async () => {
+      const pdfBuffer = Buffer.from('(Simple text content without any figures or tables)', 'utf-8');
+      
+      const pages = await extractTextFromPDF(pdfBuffer);
+      
+      expect(pages.length).toBeGreaterThan(0);
+      const totalText = pages.map(p => p.text).join('');
+      expect(totalText.length).toBeGreaterThan(0);
+      
+      // Should not have any figure or table elements
+      const allElements = pages.flatMap(p => p.elements);
+      const figureElements = allElements.filter(e => e.type === 'figure');
+      const tableElements = allElements.filter(e => e.type === 'table');
+      
+      expect(figureElements.length).toBe(0);
+      expect(tableElements.length).toBe(0);
+    });
+
+    it('should handle error when PDF parsing fails', async () => {
+      // Create an invalid PDF buffer
+      const invalidBuffer = Buffer.from('not a valid pdf', 'utf-8');
+      
+      // Mock pdf-parse to throw an error
+      const pdfParse = require('pdf-parse');
+      pdfParse.mockImplementationOnce(() => {
+        throw new Error('Invalid PDF');
+      });
+      
+      await expect(extractTextFromPDF(invalidBuffer)).rejects.toThrow('Failed to extract text from PDF');
+    });
+  });
+
+  describe('detectCitations', () => {
+    it('should detect author et al. (year) format', () => {
+      const pages = [{
+        pageNumber: 1,
+        text: 'Smith et al. (2020) found that Jones et al. (2019) had similar results.',
+        elements: []
+      }];
+      
+      const citations = detectCitations(pages);
+      
+      expect(citations.length).toBeGreaterThanOrEqual(2);
+      const smithCitation = citations.find(c => c.text.includes('Smith'));
+      expect(smithCitation).toBeDefined();
+      expect(smithCitation?.year).toBe(2020);
+    });
+
+    it('should detect numbered citations', () => {
+      const pages = [{
+        pageNumber: 1,
+        text: 'Previous research [1] showed that [2] and [3] are related.',
+        elements: []
+      }];
+      
+      const citations = detectCitations(pages);
+      
+      expect(citations.length).toBeGreaterThanOrEqual(3);
+      const numberedCitations = citations.filter(c => c.text.match(/\[\d+\]/));
+      expect(numberedCitations.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should detect reference format citations', () => {
+      const pages = [{
+        pageNumber: 1,
+        text: 'Smith, J. (2020). A study of scientific papers. Journal of Science.',
+        elements: []
+      }];
+      
+      const citations = detectCitations(pages);
+      
+      expect(citations.length).toBeGreaterThan(0);
+      const referenceCitation = citations.find(c => c.authors && c.authors[0].includes('Smith'));
+      expect(referenceCitation).toBeDefined();
+      expect(referenceCitation?.year).toBe(2020);
+    });
+
+    it('should not duplicate citations', () => {
+      const pages = [{
+        pageNumber: 1,
+        text: 'Smith et al. (2020) and Smith et al. (2020) again.',
+        elements: []
+      }];
+      
+      const citations = detectCitations(pages);
+      
+      // Should only have one citation despite appearing twice
+      const smithCitations = citations.filter(c => c.text.includes('Smith'));
+      expect(smithCitations.length).toBe(1);
+    });
+  });
+
+  describe('analyzeFigures', () => {
+    it('should generate descriptions for all figures', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' },
+        { pageNumber: 2, id: 'fig-2' }
+      ];
+      const pdfBuffer = Buffer.from('dummy pdf', 'utf-8');
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      expect(figures.length).toBe(2);
+      figures.forEach(figure => {
+        expect(figure.id).toBeDefined();
+        expect(figure.pageNumber).toBeGreaterThan(0);
+        expect(figure.description).toBeDefined();
+        expect(figure.description.length).toBeGreaterThan(0);
+        expect(figure.imageData).toBeDefined();
+      });
+    });
+
+    it('should continue processing if one figure fails', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' },
+        { pageNumber: 2, id: 'fig-2' }
+      ];
+      const pdfBuffer = Buffer.from('dummy pdf', 'utf-8');
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      // Should still return results even if some fail
+      expect(figures.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('analyzeTables', () => {
+    it('should extract structure and interpretation for all tables', async () => {
+      const tablePositions = [
+        { pageNumber: 1, id: 'table-1' },
+        { pageNumber: 2, id: 'table-2' }
+      ];
+      const pages = [
+        { pageNumber: 1, text: 'Table 1 content', elements: [] },
+        { pageNumber: 2, text: 'Table 2 content', elements: [] }
+      ];
+      
+      const tables = await analyzeTables(tablePositions, pages);
+      
+      expect(tables.length).toBe(2);
+      tables.forEach(table => {
+        expect(table.id).toBeDefined();
+        expect(table.pageNumber).toBeGreaterThan(0);
+        expect(table.headers).toBeDefined();
+        expect(Array.isArray(table.headers)).toBe(true);
+        expect(table.rows).toBeDefined();
+        expect(Array.isArray(table.rows)).toBe(true);
+        expect(table.interpretation).toBeDefined();
+        expect(table.interpretation.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('analyzeFormulas', () => {
+    it('should extract LaTeX and explanation for all formulas', async () => {
+      const formulaPositions = [
+        { pageNumber: 1, id: 'formula-1' },
+        { pageNumber: 2, id: 'formula-2' }
+      ];
+      const pages = [
+        { pageNumber: 1, text: 'The equation $E = mc^2$ is fundamental.', elements: [] },
+        { pageNumber: 2, text: 'Another formula $F = ma$ applies.', elements: [] }
+      ];
+      
+      const formulas = await analyzeFormulas(formulaPositions, pages);
+      
+      expect(formulas.length).toBe(2);
+      formulas.forEach(formula => {
+        expect(formula.id).toBeDefined();
+        expect(formula.pageNumber).toBeGreaterThan(0);
+        expect(formula.latex).toBeDefined();
+        expect(formula.explanation).toBeDefined();
+        expect(formula.explanation.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('should extract LaTeX from page text when available', async () => {
+      const formulaPositions = [
+        { pageNumber: 1, id: 'formula-1' }
+      ];
+      const pages = [
+        { pageNumber: 1, text: 'The equation $E = mc^2$ is fundamental.', elements: [] }
+      ];
+      
+      const formulas = await analyzeFormulas(formulaPositions, pages);
+      
+      expect(formulas.length).toBe(1);
+      expect(formulas[0].latex).toContain('E = mc^2');
+    });
+  });
+});

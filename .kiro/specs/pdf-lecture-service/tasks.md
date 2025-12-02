@@ -104,56 +104,56 @@
     - Test empty file handling
     - _Requirements: 1.2, 1.3_
 
-- [ ] 6. Implement Content Analyzer function
-  - [ ] 6.1 Set up PDF parsing
+- [x] 6. Implement Content Analyzer function
+  - [x] 6.1 Set up PDF parsing
     - Integrate pdf-parse or pdf.js library
     - Implement text extraction from all pages
     - Implement element position detection (figures, tables, formulas)
     - _Requirements: 2.1_
-  - [ ] 6.2 Implement figure analysis
+  - [x] 6.2 Implement figure analysis
     - Extract images from PDF
     - Send images to vision LLM API (e.g., GPT-4 Vision, Claude Vision)
     - Generate descriptive explanations
     - Store figure data with descriptions
     - _Requirements: 2.2_
-  - [ ] 6.3 Implement table extraction and interpretation
+  - [x] 6.3 Implement table extraction and interpretation
     - Extract table structure (headers, rows)
     - Send table data to LLM for interpretation
     - Store table data with interpretations
     - _Requirements: 2.3_
-  - [ ] 6.4 Implement formula parsing and explanation
+  - [x] 6.4 Implement formula parsing and explanation
     - Extract mathematical formulas (detect LaTeX or MathML)
     - Send formulas to LLM for explanation
     - Store formula data with explanations
     - _Requirements: 2.4_
-  - [ ] 6.5 Implement citation detection
+  - [x] 6.5 Implement citation detection
     - Use regex patterns to identify citations
     - Parse citation information (authors, year, title)
     - Store citation data
     - _Requirements: 2.5_
-  - [ ] 6.6 Integrate all extraction components
+  - [x] 6.6 Integrate all extraction components
     - Orchestrate parallel processing of figures, tables, formulas
     - Combine all extracted content into ExtractedContent structure
     - Store extracted content in database
     - Update job status to 'analyzing' → 'segmenting'
     - Trigger Content Segmenter function
     - _Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5_
-  - [ ] 6.7 Write property test for complete text extraction
+  - [x] 6.7 Write property test for complete text extraction
     - **Property 4: Complete text extraction**
     - **Validates: Requirements 2.1**
-  - [ ] 6.8 Write property test for multi-modal content detection
+  - [x] 6.8 Write property test for multi-modal content detection
     - **Property 5: Multi-modal content detection**
     - **Validates: Requirements 1.4, 2.2, 2.3, 2.4, 2.5**
-  - [ ] 6.9 Write property test for figure description generation
+  - [x] 6.9 Write property test for figure description generation
     - **Property 6: Figure description generation**
     - **Validates: Requirements 2.2**
-  - [ ] 6.10 Write property test for table interpretation
+  - [x] 6.10 Write property test for table interpretation
     - **Property 7: Table interpretation**
     - **Validates: Requirements 2.3**
-  - [ ] 6.11 Write property test for formula explanation
+  - [x] 6.11 Write property test for formula explanation
     - **Property 8: Formula explanation**
     - **Validates: Requirements 2.4**
-  - [ ] 6.12 Write unit tests for content analyzer
+  - [x] 6.12 Write unit tests for content analyzer
     - Test text extraction from multi-page PDF
     - Test handling of PDFs with no figures/tables
     - Test error handling for LLM API failures
