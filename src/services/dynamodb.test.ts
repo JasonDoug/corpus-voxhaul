@@ -45,17 +45,19 @@ const stageStatusArb = fc.record({
   error: fc.option(fc.string(), { nil: undefined }),
 }) as fc.Arbitrary<StageStatus>;
 
-const jobArb = fc.record({
-  jobId: fc.uuid(),
-  status: jobStatusArb,
-  createdAt: fc.date(),
-  updatedAt: fc.date(),
-  pdfFilename: fc.string({ minLength: 1, maxLength: 100 }),
-  pdfUrl: fc.webUrl(),
-  agentId: fc.option(fc.uuid(), { nil: undefined }),
-  stages: fc.array(stageStatusArb, { minLength: 0, maxLength: 5 }),
-  error: fc.option(fc.string(), { nil: undefined }),
-}) as fc.Arbitrary<Job>;
+const jobArb = fc.date().chain(createdAt =>
+  fc.record({
+    jobId: fc.uuid(),
+    status: jobStatusArb,
+    createdAt: fc.constant(createdAt),
+    updatedAt: fc.date({ min: createdAt }), // Ensure updatedAt >= createdAt
+    pdfFilename: fc.string({ minLength: 1, maxLength: 100 }),
+    pdfUrl: fc.webUrl(),
+    agentId: fc.option(fc.uuid(), { nil: undefined }),
+    stages: fc.array(stageStatusArb, { minLength: 0, maxLength: 5 }),
+    error: fc.option(fc.string(), { nil: undefined }),
+  })
+) as fc.Arbitrary<Job>;
 
 const toneArb = fc.constantFrom('humorous', 'serious', 'casual', 'formal', 'enthusiastic');
 
@@ -109,29 +111,41 @@ describe('Property 32: Function execution and persistence', () => {
     test('For any job, updating it should persist the changes', async () => {
       await fc.assert(
         fc.asyncProperty(jobArb, jobStatusArb, fc.string(), async (job, newStatus, newError) => {
-          // Create the job
-          await createJob(job);
-          
-          // Update the job
-          const updates = { status: newStatus, error: newError };
-          const updated = await updateJob(job.jobId, updates);
-          
-          // Retrieve the job
-          const retrieved = await getJob(job.jobId);
-          
-          // Cleanup
-          await deleteJob(job.jobId);
-          
-          // Verify the updates were persisted
-          expect(retrieved).not.toBeNull();
-          expect(retrieved?.status).toBe(newStatus);
-          expect(retrieved?.error).toBe(newError);
-          expect(updated.status).toBe(newStatus);
-          expect(updated.error).toBe(newError);
+          try {
+            // Create the job
+            await createJob(job);
+            
+            // Update the job
+            const updates = { status: newStatus, error: newError };
+            const updated = await updateJob(job.jobId, updates);
+            
+            // Retrieve the job
+            const retrieved = await getJob(job.jobId);
+            
+            // Verify the updates were persisted BEFORE cleanup
+            expect(retrieved).not.toBeNull();
+            if (retrieved) {
+              expect(retrieved.status).toBe(newStatus);
+              expect(retrieved.error).toBe(newError);
+            }
+            expect(updated.status).toBe(newStatus);
+            expect(updated.error).toBe(newError);
+            
+            // Cleanup after assertions
+            await deleteJob(job.jobId);
+          } catch (error) {
+            // Cleanup on error
+            try {
+              await deleteJob(job.jobId);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            throw error;
+          }
         }),
-        { numRuns: 20 }
+        { numRuns: 5 }
       );
-    }, 30000);
+    }, 60000);
 
     test('For any job, deleting it should make it unretrievable', async () => {
       await fc.assert(

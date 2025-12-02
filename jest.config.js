@@ -22,9 +22,12 @@ module.exports = {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       tsconfig: 'tsconfig.json'
+    }],
+    '^.+\\.js$': ['ts-jest', {
+      tsconfig: 'tsconfig.json'
     }]
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(uuid)/)'
+    'node_modules/(?!uuid)'
   ]
 };

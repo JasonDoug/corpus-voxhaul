@@ -272,6 +272,9 @@ describe('Agent Validation', () => {
       await createAgent({ ...validAgentData, name: 'Agent 1' });
       const agent2 = await createAgent({ ...validAgentData, name: 'Agent 2' });
       
+      // Small delay to ensure both agents are fully persisted
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Try to update agent2 to have agent1's name
       await expect(updateAgent(agent2.id, { name: 'Agent 1' })).rejects.toThrow(AgentValidationError);
       await expect(updateAgent(agent2.id, { name: 'Agent 1' })).rejects.toThrow('already exists');

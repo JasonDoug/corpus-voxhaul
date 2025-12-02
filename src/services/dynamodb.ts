@@ -252,6 +252,15 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
       ...current,
       ...updates,
       id, // Ensure id doesn't change
+      // Deep merge nested objects
+      personality: updates.personality ? {
+        ...current.personality,
+        ...updates.personality,
+      } : current.personality,
+      voice: updates.voice ? {
+        ...current.voice,
+        ...updates.voice,
+      } : current.voice,
     };
     
     const record = agentToRecord(updated);
