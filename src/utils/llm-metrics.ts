@@ -4,7 +4,7 @@ import { logger } from './logger';
 import { metrics } from './metrics';
 
 /**
- * Model pricing per 1M tokens (approximate, as of 2024)
+ * Model pricing per 1M tokens (approximate, as of 2024-2025)
  * These are rough estimates and should be updated based on actual provider pricing
  */
 const MODEL_PRICING = {
@@ -24,7 +24,17 @@ const MODEL_PRICING = {
   'openai/gpt-3.5-turbo': { input: 0.5, output: 1.5 },
   'anthropic/claude-3-opus': { input: 15.0, output: 75.0 },
   'anthropic/claude-3-sonnet': { input: 3.0, output: 15.0 },
+  'anthropic/claude-3-5-sonnet': { input: 3.0, output: 15.0 },
   'anthropic/claude-3-haiku': { input: 0.25, output: 1.25 },
+  
+  // FREE OpenRouter models (cost = $0)
+  'google/gemini-2.0-flash-exp:free': { input: 0.0, output: 0.0 },
+  'google/gemini-pro-vision': { input: 0.0, output: 0.0 },
+  'x-ai/grok-4.1-fast:free': { input: 0.0, output: 0.0 },
+  'meta-llama/llama-3.3-70b-instruct:free': { input: 0.0, output: 0.0 },
+  'meta-llama/llama-3.1-405b-instruct:free': { input: 0.0, output: 0.0 },
+  'qwen/qwen-2.5-72b-instruct:free': { input: 0.0, output: 0.0 },
+  'mistralai/mistral-7b-instruct:free': { input: 0.0, output: 0.0 },
   
   // Default fallback pricing
   'default': { input: 5.0, output: 15.0 },

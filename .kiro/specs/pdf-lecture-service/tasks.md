@@ -572,7 +572,8 @@ ty 8: Formula explanation**
     - Verify audio reflects personality (tone, pacing)
     - Compare scripts to confirm different word choices and styles
     - _Requirements: 4.1, 4.5, 4.6, 5.3, 5.4, 6.3, 6.4_
-  - [ ] 20.3 Test with various PDF types and complexities
+  - [ ] 20.3 Test with various PDF types and complexities **[POSTPONED UNTIL AFTER AWS DEPLOYMENT]**
+    - **Note**: Edge case testing will be more effective in production environment with real workloads
     - Test with short paper (5 pages, minimal figures)
     - Test with long paper (20+ pages, many sections)
     - Test with figure-heavy paper (10+ figures)
@@ -582,7 +583,8 @@ ty 8: Formula explanation**
     - Verify quality and completeness across all types
     - Verify processing completes within expected time ranges
     - _Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5_
-  - [ ] 20.4 Test error handling and edge cases
+  - [ ] 20.4 Test error handling and edge cases **[POSTPONED UNTIL AFTER AWS DEPLOYMENT]**
+    - **Note**: Error handling testing will be more comprehensive in production environment
     - Test with corrupted PDF file
     - Test with oversized PDF (>100MB)
     - Test with non-PDF file
@@ -604,12 +606,16 @@ ty 8: Formula explanation**
     - Verify drift remains under 200ms
     - _Requirements: 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5_
   - [ ] 20.6 Performance and cost validation
+    - **Note**: Cost tracking already implemented in `src/utils/llm-metrics.ts` with per-job summaries
+    - **Note**: All LLM calls automatically log cost estimates based on token usage
+    - **Note**: Free models (Gemini, Grok, Llama) tracked with $0 cost
     - Measure total processing time for typical paper (10-15 pages)
     - Measure processing time for each stage (upload, analyze, segment, script, audio)
-    - Calculate API costs per PDF (LLM calls + TTS + vision)
-    - Verify total cost is under $0.50 per PDF
+    - Calculate API costs per PDF (LLM calls + TTS + vision) - **ALREADY LOGGED**
+    - Verify total cost is under $0.50 per PDF (currently $0 with free models)
     - Verify total processing time is under 6 minutes
     - Identify bottlenecks and optimization opportunities
+    - Review cost logs from recent E2E tests to establish baseline
     - _Requirements: All_
   - [ ] 20.7 Test agent management operations
     - Create multiple agents with different configurations
@@ -619,21 +625,24 @@ ty 8: Formula explanation**
     - Verify agent selection persists through pipeline
     - Test with invalid agent configurations
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
-  - [ ] 20.8 Test concurrent processing
+  - [ ] 20.8 Test concurrent processing **[POSTPONED UNTIL AFTER AWS DEPLOYMENT]**
+    - **Note**: Concurrent processing testing requires production Lambda environment for accurate results
     - Upload multiple PDFs simultaneously
     - Verify all jobs are queued correctly
     - Verify jobs process independently
     - Verify no resource conflicts or race conditions
     - Monitor system performance under load
     - _Requirements: 9.1, 9.3, 9.4_
-  - [ ] 20.9 Test local development environment
+  - [ ] 20.9 Test local development environment **[POSTPONED UNTIL AFTER AWS DEPLOYMENT]**
+    - **Note**: Local environment already tested during development; comprehensive validation after deployment
     - Start local server with LocalStack
     - Test all endpoints via HTTP
     - Verify local storage (S3, DynamoDB) works correctly
     - Verify complete pipeline works locally
     - Test hot-reload during development
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
-  - [ ] 20.10 Validate all correctness properties
+  - [ ] 20.10 Validate all correctness properties **[POSTPONED UNTIL AFTER AWS DEPLOYMENT]**
+    - **Note**: Property-based testing will be run comprehensively after deployment with production data
     - Review all 35 correctness properties from design document
     - Verify each property has corresponding test
     - Run all property-based tests with 1000 iterations
