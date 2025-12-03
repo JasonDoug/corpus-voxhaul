@@ -617,7 +617,7 @@ ty 8: Formula explanation**
     - Identify bottlenecks and optimization opportunities
     - Review cost logs from recent E2E tests to establish baseline
     - _Requirements: All_
-  - [ ] 20.7 Test agent management operations
+  - [x] 20.7 Test agent management operations
     - Create multiple agents with different configurations
     - List all agents and verify completeness
     - Update agent personality and voice settings
