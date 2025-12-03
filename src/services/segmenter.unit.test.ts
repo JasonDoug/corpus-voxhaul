@@ -173,16 +173,23 @@ describe('Content Segmenter Unit Tests', () => {
       
       const prompt = createSegmentationPrompt(extractedContent);
       
-      expect(prompt).toContain('TEXT CONTENT');
+      // Check for enhanced prompt structure
+      expect(prompt).toContain('DOCUMENT OVERVIEW');
+      expect(prompt).toContain('Total Pages: 2');
+      expect(prompt).toContain('PAGE SUMMARIES');
       expect(prompt).toContain('Page 1');
       expect(prompt).toContain('Introduction text');
-      expect(prompt).toContain('FIGURES');
+      expect(prompt).toContain('FIGURE INVENTORY');
       expect(prompt).toContain('Figure 1');
-      expect(prompt).toContain('TABLES');
+      expect(prompt).toContain('DETAILED FIGURE DESCRIPTIONS');
+      expect(prompt).toContain('A chart');
+      expect(prompt).toContain('TABLE INVENTORY');
+      expect(prompt).toContain('DETAILED TABLE DESCRIPTIONS');
       expect(prompt).toContain('Data table');
-      expect(prompt).toContain('FORMULAS');
+      expect(prompt).toContain('FORMULA INVENTORY');
+      expect(prompt).toContain('DETAILED FORMULA DESCRIPTIONS');
       expect(prompt).toContain('E=mc^2');
-      expect(prompt).toContain('CITATIONS');
+      expect(prompt).toContain('CITATION CONTEXT');
       expect(prompt).toContain('Smith et al. (2020)');
     });
     
@@ -199,10 +206,13 @@ describe('Content Segmenter Unit Tests', () => {
       
       const prompt = createSegmentationPrompt(extractedContent);
       
-      expect(prompt).toContain('TEXT CONTENT');
+      // Check for enhanced prompt structure
+      expect(prompt).toContain('DOCUMENT OVERVIEW');
+      expect(prompt).toContain('PAGE SUMMARIES');
       expect(prompt).toContain('Simple text');
-      expect(prompt).not.toContain('FIGURES');
-      expect(prompt).not.toContain('TABLES');
+      // Should not contain inventory sections when no elements exist
+      expect(prompt).not.toContain('FIGURE INVENTORY');
+      expect(prompt).not.toContain('TABLE INVENTORY');
     });
     
     test('truncates very long page text', () => {
@@ -219,8 +229,9 @@ describe('Content Segmenter Unit Tests', () => {
       
       const prompt = createSegmentationPrompt(extractedContent);
       
-      // Should truncate the long text
-      expect(prompt).toContain('[truncated]');
+      // Should truncate the long text with enhanced format
+      expect(prompt).toContain('[truncated');
+      expect(prompt).toContain('chars remaining]');
       // The full text should not be in the prompt
       expect(prompt).not.toContain(longText);
     });

@@ -6,6 +6,11 @@ process.env.NODE_ENV = 'test';
 process.env.LOCAL_MODE = 'true';
 process.env.USE_LOCALSTACK = 'true';
 
+// Set mock API keys for testing
+process.env.OPENROUTER_API_KEY = 'test-key-mock';
+process.env.OPENAI_API_KEY = 'test-key-mock';
+process.env.ANTHROPIC_API_KEY = 'test-key-mock';
+
 // Mock console methods to reduce noise in test output
 global.console = {
   ...console,
