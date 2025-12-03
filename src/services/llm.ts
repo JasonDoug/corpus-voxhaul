@@ -606,6 +606,20 @@ export function getRecommendedModel(
   task: keyof typeof RECOMMENDED_MODELS,
   provider?: LLMProvider
 ): string {
+  // Check for environment variable override first
+  const envVarMap: Record<string, string> = {
+    'analysis': process.env.LLM_MODEL_ANALYSIS || '',
+    'vision': process.env.LLM_MODEL_VISION || '',
+    'segmentation': process.env.LLM_MODEL_SEGMENTATION || '',
+    'script': process.env.LLM_MODEL_SCRIPT || '',
+    'fast': process.env.LLM_MODEL_FAST || '',
+  };
+  
+  if (envVarMap[task]) {
+    return envVarMap[task];
+  }
+  
+  // Fall back to recommended models
   const detectedProvider = provider || (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'openai');
   return RECOMMENDED_MODELS[task][detectedProvider];
 }

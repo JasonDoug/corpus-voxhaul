@@ -1,15 +1,21 @@
 // Test setup and configuration
 // This file runs before all tests
 
+// Load .env file first
+require('dotenv').config();
+
 // Set test environment
 process.env.NODE_ENV = 'test';
 process.env.LOCAL_MODE = 'true';
 process.env.USE_LOCALSTACK = 'true';
+process.env.LOCALSTACK_ENDPOINT = process.env.LOCALSTACK_ENDPOINT || 'http://localhost.localstack.cloud:4566';
 
-// Set mock API keys for testing
-process.env.OPENROUTER_API_KEY = 'test-key-mock';
-process.env.OPENAI_API_KEY = 'test-key-mock';
-process.env.ANTHROPIC_API_KEY = 'test-key-mock';
+// Only set mock API keys if real ones aren't already set
+if (!process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
+  process.env.OPENROUTER_API_KEY = 'test-key-mock';
+  process.env.OPENAI_API_KEY = 'test-key-mock';
+  process.env.ANTHROPIC_API_KEY = 'test-key-mock';
+}
 
 // Enable feature flags by default in tests
 process.env.ENABLE_REAL_SEGMENTATION = 'true';

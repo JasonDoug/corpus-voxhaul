@@ -4,6 +4,14 @@ import cors from 'cors';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
+import DOMMatrix from '@thednp/dommatrix';
+
+// Polyfill DOM APIs required by pdf-parse
+(global as any).DOMMatrix = DOMMatrix;
+
+(global as any).Path2D = class Path2D {
+  constructor() {}
+};
 
 const app = express();
 
@@ -44,8 +52,23 @@ app.post('/api/upload', async (req: Request, res: Response, next: NextFunction) 
     // Extract file from request
     // In a real implementation, this would use multer or similar for file uploads
     // For now, we expect the file to be in req.body
+    
+    // Convert file data to Buffer if needed
+    let fileBuffer: Buffer;
+    if (Buffer.isBuffer(req.body.file)) {
+      fileBuffer = req.body.file;
+    } else if (req.body.file && req.body.file.type === 'Buffer' && Array.isArray(req.body.file.data)) {
+      // Handle JSON-serialized Buffer
+      fileBuffer = Buffer.from(req.body.file.data);
+    } else if (typeof req.body.file === 'string') {
+      // Handle base64-encoded string
+      fileBuffer = Buffer.from(req.body.file, 'base64');
+    } else {
+      throw new Error('Invalid file format');
+    }
+    
     const event = {
-      file: req.body.file, // Buffer
+      file: fileBuffer,
       filename: req.body.filename,
       agentId: req.body.agentId,
     };

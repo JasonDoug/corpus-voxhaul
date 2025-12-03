@@ -727,18 +727,31 @@ async function generateScriptForSegment(
   
   // Create a script block for each paragraph, mapping to content blocks
   paragraphs.forEach((paragraph, index) => {
-    // Map to corresponding content block (or first block if we have more paragraphs than content blocks)
-    const contentBlockIndex = Math.min(index, segment.contentBlocks.length - 1);
-    const contentBlock = segment.contentBlocks[contentBlockIndex];
+    // Map to corresponding content block (or create a default if none exist)
+    let contentReference;
+    
+    if (segment.contentBlocks.length > 0) {
+      const contentBlockIndex = Math.min(index, segment.contentBlocks.length - 1);
+      const contentBlock = segment.contentBlocks[contentBlockIndex];
+      
+      contentReference = {
+        type: contentBlock.type,
+        id: typeof contentBlock.content === 'string' ? 'text' : (contentBlock.content as any).id || 'unknown',
+        pageNumber: contentBlock.pageReference,
+      };
+    } else {
+      // Default reference when no content blocks exist
+      contentReference = {
+        type: 'text' as const,
+        id: 'default',
+        pageNumber: 1,
+      };
+    }
     
     scriptBlocks.push({
       id: uuidv4(),
       text: paragraph.trim(),
-      contentReference: {
-        type: contentBlock.type,
-        id: typeof contentBlock.content === 'string' ? 'text' : (contentBlock.content as any).id || 'unknown',
-        pageNumber: contentBlock.pageReference,
-      },
+      contentReference,
     });
   });
   
