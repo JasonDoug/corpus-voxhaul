@@ -1,4 +1,17 @@
- # Implementation Plan
+# Implementation Plan
+
+**Status**: Core implementation complete (Tasks 1-19) ✅  
+**LLM Integration**: Completed via `.kiro/specs/llm-integration-completion/` spec ✅  
+**Remaining**: End-to-end testing (Task 20) and Production deployment (Tasks 21-22)
+
+**Note**: Tasks 8.4, 8.9, 9.5, 9.13, 6.2a, and 6.13 were completed as part of the LLM Integration Completion spec, which addressed three critical gaps:
+1. Real LLM integration for content segmentation
+2. Real LLM integration for script generation with personality support
+3. Real PDF image extraction for vision LLM analysis
+
+All core functionality is now implemented with real API integrations. The system is ready for comprehensive end-to-end testing and production deployment.
+
+---
 
 - [x] 1. Set up project structure and development environment
   - Initialize TypeScript project with Node.js 20.x
@@ -116,6 +129,13 @@
     - Generate descriptive explanations
     - Store figure data with descriptions
     - _Requirements: 2.2_
+  - [x] 6.2a Implement real PDF image extraction (completed via llm-integration-completion spec)
+    - Real image extraction from PDF buffers using pdf-img-convert
+    - Base64 encoding for vision API compatibility
+    - Image optimization (resize to 2000x2000 max)
+    - Error handling with graceful degradation
+    - Integration with existing vision LLM pipeline
+    - _Requirements: 2.2_
   - [x] 6.3 Implement table extraction and interpretation
     - Extract table structure (headers, rows)
     - Send table data to LLM for interpretation
@@ -159,11 +179,16 @@ ty 8: Formula explanation**
     - Test handling of PDFs with no figures/tables
     - Test error handling for LLM API failures
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [x] 6.13 Write integration test for real image extraction
+    - Extract images from real scientific PDF
+    - Verify vision LLM can analyze extracted images
+    - Verify descriptions are meaningful
+    - _Requirements: 2.2_
 
 - [x] 7. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement Content Segmenter function
+- [x] 8. Implement Content Segmenter function
   - [x] 8.1 Create segmentation prompt for LLM
     - Design prompt that instructs LLM to identify topics
     - Include instructions for grouping related concepts
@@ -183,20 +208,31 @@ ty 8: Formula explanation**
     - Update job status to 'segmenting' → 'generating_script'
     - Trigger Script Generator function
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
-  - [x] 8.4 Write property test for segmentation completeness
+  - [x] 8.4 Implement real LLM integration (completed via llm-integration-completion spec)
+    - Real LLM API calls via llmService
+    - Comprehensive prompt construction with page summaries
+    - JSON response parsing and validation
+    - Error handling with retry logic
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [x] 8.5 Write property test for segmentation completeness
     - **Property 9: Segmentation completeness**
     - **Validates: Requirements 3.1, 3.5**
-  - [x] 8.5 Write property test for prerequisite ordering
+  - [x] 8.6 Write property test for prerequisite ordering
     - **Property 11: Prerequisite ordering**
     - **Validates: Requirements 3.4**
-  - [x] 8.6 Write property test for coherent grouping
+  - [x] 8.7 Write property test for coherent grouping
     - **Property 12: Coherent grouping**
     - **Validates: Requirements 3.2**
-  - [x] 8.7 Write unit tests for segmentation logic
+  - [x] 8.8 Write unit tests for segmentation logic
     - Test topological sort with various dependency graphs
     - Test handling of circular dependencies
     - Test segmentation with single-topic content
     - _Requirements: 3.3, 3.4_
+  - [x] 8.9 Write integration test for real LLM segmentation
+    - Test with real LLM API
+    - Verify different PDFs produce different segments
+    - Verify segment structure is valid
+    - _Requirements: 3.1, 3.2, 3.3_
 
 - [x] 9. Implement Script Generator function
   - [x] 9.1 Create script generation prompts
@@ -223,28 +259,43 @@ ty 8: Formula explanation**
     - Update job status to 'generating_script' → 'synthesizing_audio'
     - Trigger Audio Synthesizer function
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
-  - [x] 9.5 Write property test for script generation completeness
+  - [x] 9.5 Implement real LLM integration (completed via llm-integration-completion spec)
+    - Real LLM API calls via llmService
+    - Agent personality integration in system prompts
+    - Tone-specific guidance (humorous vs. serious)
+    - Content-specific script generation with visual element references
+    - Higher temperature (0.8) for creative output
+    - Error handling with retry logic
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+  - [x] 9.6 Write property test for script generation completeness
     - **Property 16: Script generation completeness**
     - **Validates: Requirements 5.1**
-  - [x] 9.6 Write property test for agent personality influence
+  - [x] 9.7 Write property test for agent personality influence
     - **Property 17: Agent personality influence**
     - **Validates: Requirements 4.5, 4.6, 5.3, 5.4**
-  - [x] 9.7 Write property test for visual element descriptions
+  - [x] 9.8 Write property test for visual element descriptions
     - **Property 18: Visual element descriptions**
     - **Validates: Requirements 5.5**
-  - [x] 9.8 Write property test for script timing data
+  - [x] 9.9 Write property test for script timing data
     - **Property 19: Script timing data**
     - **Validates: Requirements 5.6**
-  - [x] 9.9 Write property test for accessibility improvement
+  - [x] 9.10 Write property test for accessibility improvement
     - **Property 20: Accessibility improvement**
     - **Validates: Requirements 5.2**
-  - [x] 9.10 Write property test for agent selection persistence
+  - [x] 9.11 Write property test for agent selection persistence
     - **Property 34: Agent selection persistence**
     - **Validates: Requirements 4.3**
-  - [x] 9.11 Write unit tests for script generation
+  - [x] 9.12 Write unit tests for script generation
     - Test script generation with different agent personalities
     - Test handling of segments with many visual elements
     - Test error handling for LLM API failures
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [x] 9.13 Write integration test for real LLM script generation
+    - Test with real LLM API
+    - Generate scripts with humorous agent
+    - Generate scripts with serious agent
+    - Verify personality differences
+    - Verify content-specific references
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
 - [x] 10. Implement Audio Synthesizer function
@@ -471,3 +522,217 @@ ty 8: Formula explanation**
     - Document agent creation and management
     - Document playback interface usage
     - _Requirements: 1.1, 4.1, 7.1, 7.2_
+  - [x] 19.4 Update implementation status documentation
+    - Update docs/IMPLEMENTATION_STATUS.md to reflect 100% completion
+    - Update docs/MISSING_IMPLEMENTATIONS.md to mark all components complete
+    - Document LLM integration completion
+    - _Requirements: All_
+
+- [ ] 20. End-to-End Testing and Validation
+  - [ ] 20.1 Test complete pipeline with real scientific PDF
+    - Upload a real scientific PDF (e.g., arXiv paper)
+    - Verify upload succeeds and returns job ID
+    - Monitor job status through all stages
+    - Verify segmentation produces logical topics based on actual content
+    - Verify scripts reflect actual PDF content (not mock data)
+    - Verify figure descriptions are meaningful and content-specific
+    - Verify audio generation completes successfully
+    - Verify playback interface loads and synchronizes correctly
+    - _Requirements: 1.1, 1.5, 2.1, 2.2, 3.1, 3.2, 5.1, 6.1, 7.1, 7.2, 7.3_
+  - [ ] 20.2 Test with multiple agent personalities
+    - Create humorous agent with jokes and casual tone
+    - Create serious agent with formal academic tone
+    - Generate lecture with humorous agent for same PDF
+    - Generate lecture with serious agent for same PDF
+    - Verify personality differences are evident in scripts
+    - Verify audio reflects personality (tone, pacing)
+    - Compare scripts to confirm different word choices and styles
+    - _Requirements: 4.1, 4.5, 4.6, 5.3, 5.4, 6.3, 6.4_
+  - [ ] 20.3 Test with various PDF types and complexities
+    - Test with short paper (5 pages, minimal figures)
+    - Test with long paper (20+ pages, many sections)
+    - Test with figure-heavy paper (10+ figures)
+    - Test with formula-heavy paper (mathematics/physics)
+    - Test with table-heavy paper (data analysis)
+    - Test with citation-heavy paper (review article)
+    - Verify quality and completeness across all types
+    - Verify processing completes within expected time ranges
+    - _Requirements: 1.4, 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [ ] 20.4 Test error handling and edge cases
+    - Test with corrupted PDF file
+    - Test with oversized PDF (>100MB)
+    - Test with non-PDF file
+    - Test with empty PDF
+    - Test with PDF containing only images (no text)
+    - Test with PDF in non-English language
+    - Verify appropriate error messages for each case
+    - Verify system doesn't crash or hang
+    - _Requirements: 1.2, 1.3_
+  - [ ] 20.5 Test playback synchronization accuracy
+    - Load completed lecture in playback interface
+    - Play audio from beginning
+    - Verify highlighting updates smoothly throughout
+    - Verify PDF pages change at appropriate times
+    - Test seek to various positions (beginning, middle, end)
+    - Verify highlighting updates correctly after seek
+    - Test pause and resume
+    - Measure synchronization drift over full lecture duration
+    - Verify drift remains under 200ms
+    - _Requirements: 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - [ ] 20.6 Performance and cost validation
+    - Measure total processing time for typical paper (10-15 pages)
+    - Measure processing time for each stage (upload, analyze, segment, script, audio)
+    - Calculate API costs per PDF (LLM calls + TTS + vision)
+    - Verify total cost is under $0.50 per PDF
+    - Verify total processing time is under 6 minutes
+    - Identify bottlenecks and optimization opportunities
+    - _Requirements: All_
+  - [ ] 20.7 Test agent management operations
+    - Create multiple agents with different configurations
+    - List all agents and verify completeness
+    - Update agent personality and voice settings
+    - Delete agent and verify removal
+    - Verify agent selection persists through pipeline
+    - Test with invalid agent configurations
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [ ] 20.8 Test concurrent processing
+    - Upload multiple PDFs simultaneously
+    - Verify all jobs are queued correctly
+    - Verify jobs process independently
+    - Verify no resource conflicts or race conditions
+    - Monitor system performance under load
+    - _Requirements: 9.1, 9.3, 9.4_
+  - [ ] 20.9 Test local development environment
+    - Start local server with LocalStack
+    - Test all endpoints via HTTP
+    - Verify local storage (S3, DynamoDB) works correctly
+    - Verify complete pipeline works locally
+    - Test hot-reload during development
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [ ] 20.10 Validate all correctness properties
+    - Review all 35 correctness properties from design document
+    - Verify each property has corresponding test
+    - Run all property-based tests with 1000 iterations
+    - Verify all properties pass
+    - Document any property failures or edge cases discovered
+    - _Requirements: All_
+
+- [ ] 21. Deployment and Production Rollout
+  - [ ] 21.1 Prepare production environment
+    - Set up AWS account and configure credentials
+    - Create production S3 buckets with encryption
+    - Create production DynamoDB tables with auto-scaling
+    - Configure CloudWatch log groups and alarms
+    - Set up API Gateway with custom domain
+    - Configure environment variables for production
+    - Set up API keys for LLM services (OpenRouter/OpenAI/Anthropic)
+    - Set up API keys for TTS service
+    - _Requirements: 9.1, 9.3_
+  - [ ] 21.2 Deploy to staging environment
+    - Package Lambda functions with dependencies
+    - Deploy using AWS SAM or Serverless Framework
+    - Verify all Lambda functions are deployed correctly
+    - Verify API Gateway endpoints are accessible
+    - Verify DynamoDB tables are created
+    - Verify S3 buckets are accessible
+    - Run smoke tests against staging endpoints
+    - _Requirements: 9.1, 9.2, 9.3_
+  - [ ] 21.3 Run integration tests against staging
+    - Upload test PDF to staging environment
+    - Monitor complete pipeline execution
+    - Verify all stages complete successfully
+    - Verify audio and playback work correctly
+    - Test error scenarios (invalid inputs, API failures)
+    - Verify logging and metrics are captured
+    - _Requirements: 9.2, 9.5_
+  - [ ] 21.4 Performance testing in staging
+    - Run load tests with multiple concurrent uploads
+    - Measure Lambda cold start times
+    - Measure end-to-end processing times
+    - Verify auto-scaling works correctly
+    - Monitor API costs during load test
+    - Identify and address performance bottlenecks
+    - _Requirements: 9.3_
+  - [ ] 21.5 Set up monitoring and alerting
+    - Configure CloudWatch dashboards for key metrics
+    - Set up alarms for error rates (>5%)
+    - Set up alarms for processing time (>10 minutes)
+    - Set up alarms for API failures
+    - Set up alarms for storage quota
+    - Configure SNS notifications for critical alerts
+    - Test alert delivery
+    - _Requirements: 9.2_
+  - [ ] 21.6 Deploy to production
+    - Review staging test results
+    - Get approval for production deployment
+    - Deploy to production using blue-green deployment
+    - Verify all services are healthy
+    - Run smoke tests against production
+    - Monitor error rates and performance
+    - _Requirements: 9.1, 9.2, 9.3_
+  - [ ] 21.7 Gradual production rollout
+    - Enable for 10% of traffic (canary deployment)
+    - Monitor for 24 hours
+    - Check error rates, processing times, costs
+    - Review generated content quality
+    - Increase to 50% if stable
+    - Monitor for 24 hours
+    - Increase to 100% if stable
+    - _Requirements: 9.3_
+  - [ ] 21.8 Post-deployment validation
+    - Process 10+ real scientific PDFs in production
+    - Verify quality of segmentation, scripts, and audio
+    - Gather user feedback on lecture quality
+    - Monitor API costs and optimize if needed
+    - Monitor processing times and optimize if needed
+    - Document any issues or improvements needed
+    - _Requirements: All_
+  - [ ] 21.9 Set up backup and disaster recovery
+    - Configure S3 versioning and lifecycle policies
+    - Set up DynamoDB point-in-time recovery
+    - Document recovery procedures
+    - Test backup restoration process
+    - _Requirements: 9.5_
+  - [ ] 21.10 Security hardening
+    - Review IAM roles and apply least privilege
+    - Enable AWS WAF on API Gateway
+    - Configure rate limiting and throttling
+    - Set up API key rotation schedule
+    - Review and redact sensitive data in logs
+    - Run security audit (AWS Trusted Advisor)
+    - _Requirements: 9.1, 9.2_
+
+- [ ] 22. Post-Launch Optimization and Maintenance
+  - [ ] 22.1 Optimize LLM prompts based on real usage
+    - Analyze quality of segmentation from real PDFs
+    - Refine segmentation prompts for better topic identification
+    - Analyze quality of scripts from real PDFs
+    - Refine script generation prompts for better explanations
+    - A/B test prompt variations
+    - _Requirements: 3.1, 3.2, 5.1, 5.2_
+  - [ ] 22.2 Optimize costs
+    - Analyze API costs per PDF
+    - Identify opportunities to reduce token usage
+    - Implement caching for repeated content
+    - Optimize image sizes for vision API
+    - Consider using cheaper models for non-critical tasks
+    - _Requirements: 9.3_
+  - [ ] 22.3 Optimize performance
+    - Analyze processing time bottlenecks
+    - Implement parallel processing where possible
+    - Optimize Lambda memory allocation
+    - Reduce cold start times
+    - Implement request batching where applicable
+    - _Requirements: 9.3_
+  - [ ] 22.4 Enhance monitoring and observability
+    - Add custom metrics for content quality
+    - Implement distributed tracing with X-Ray
+    - Create dashboards for business metrics
+    - Set up automated quality checks
+    - _Requirements: 9.2_
+  - [ ] 22.5 Plan future enhancements
+    - Gather user feedback and feature requests
+    - Prioritize improvements (e.g., multi-language support, custom voices)
+    - Document technical debt and refactoring needs
+    - Plan next iteration of development
+    - _Requirements: All_
