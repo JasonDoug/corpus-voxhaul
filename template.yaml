@@ -16,6 +16,14 @@ Globals:
         S3_BUCKET_AUDIO: !Ref AudioBucket
         EVENT_BUS_NAME: !Ref EventBus
         NODE_ENV: production
+        OPENROUTER_API_KEY: !Ref OpenRouterApiKey
+        OPENAI_API_KEY: !Ref OpenAIApiKey
+        ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+        TTS_API_KEY: !Ref TTSApiKey
+        LLM_PROVIDER: !Ref LLMProvider
+        MAX_PDF_SIZE_MB: 100
+        ANALYSIS_TIMEOUT_MS: 300000
+        AUDIO_SYNTHESIS_TIMEOUT_MS: 600000
 
 Parameters:
   Stage:
@@ -26,6 +34,39 @@ Parameters:
       - staging
       - prod
     Description: Deployment stage
+  
+  OpenRouterApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: OpenRouter API Key (recommended - unified access to multiple models)
+  
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: OpenAI API Key (alternative to OpenRouter)
+  
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Anthropic API Key (alternative to OpenRouter)
+  
+  TTSApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Text-to-Speech API Key for audio synthesis
+  
+  LLMProvider:
+    Type: String
+    Default: openrouter
+    AllowedValues:
+      - openrouter
+      - openai
+      - anthropic
+    Description: LLM provider to use (openrouter recommended)
 
 Resources:
   # API Gateway
