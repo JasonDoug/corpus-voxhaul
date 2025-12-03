@@ -77,13 +77,19 @@ export class MockTTSProvider implements TTSProvider {
 /**
  * AWS Polly TTS Provider
  * Uses AWS Polly for text-to-speech synthesis
+ * 
+ * Supports multiple engines:
+ * - generative: Best quality, most natural (newest, limited voices)
+ * - long-form: Optimized for long content (news-style voices)
+ * - neural: High quality, natural (most voices available)
+ * - standard: Basic quality, fast (all voices available)
  */
 export class PollyTTSProvider implements TTSProvider {
   private polly: any; // AWS.Polly instance
+  private engine: string;
 
   constructor() {
     // Initialize AWS Polly client
-    // This would be configured based on environment
     const AWS = require('aws-sdk');
     const { config } = require('../utils/config');
     
@@ -97,63 +103,102 @@ export class PollyTTSProvider implements TTSProvider {
     }
     
     this.polly = new AWS.Polly(pollyConfig);
+    
+    // Get engine from environment (generative, long-form, neural, standard)
+    this.engine = process.env.POLLY_ENGINE || 'neural';
+    
+    logger.info('AWS Polly TTS Provider initialized', {
+      region: config.aws.region,
+      engine: this.engine,
+    });
   }
 
   async synthesize(text: string, voiceConfig: LectureAgent['voice']): Promise<TTSResult> {
     logger.info('AWS Polly TTS synthesis', {
       textLength: text.length,
       voiceId: voiceConfig.voiceId,
+      engine: this.engine,
     });
 
     return withRetryAndCircuitBreaker(
       'aws-polly',
       async () => {
         try {
-          // Request speech synthesis with word-level timing
-          const params = {
+          // Build synthesis parameters
+          const params: any = {
             Text: text,
             OutputFormat: 'mp3',
             VoiceId: voiceConfig.voiceId,
-            Engine: 'neural', // Use neural engine for better quality
-            SpeechMarkTypes: ['word'], // Request word-level timing
+            Engine: this.engine,
           };
+          
+          // Add engine-specific parameters
+          if (this.engine === 'generative') {
+            // Generative engine doesn't support SpeechMarkTypes
+            // We'll need to estimate timings
+            logger.info('Using generative engine (word timings will be estimated)');
+          } else if (this.engine === 'long-form') {
+            // Long-form engine supports speech marks
+            params.SpeechMarkTypes = ['word'];
+          } else {
+            // Neural and standard engines support speech marks
+            params.SpeechMarkTypes = ['word'];
+          }
 
           // Get audio stream
           const audioResult = await this.polly.synthesizeSpeech(params).promise();
           const audioBuffer = audioResult.AudioStream as Buffer;
 
-          // Get word timing marks
-          const timingParams = {
-            ...params,
-            OutputFormat: 'json',
-          };
-          const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
-          const timingData = timingResult.AudioStream.toString('utf-8');
-          
-          // Parse timing marks (each line is a JSON object)
-          const wordTimings: WordTiming[] = [];
-          const lines = timingData.split('\n').filter((line: string) => line.trim());
-          
-          for (const line of lines) {
+          let wordTimings: WordTiming[] = [];
+          let duration = 0;
+
+          // Get word timing marks (if supported by engine)
+          if (this.engine !== 'generative') {
             try {
-              const mark = JSON.parse(line);
-              if (mark.type === 'word') {
-                wordTimings.push({
-                  word: mark.value,
-                  startTime: mark.time / 1000, // Convert ms to seconds
-                  endTime: (mark.time + mark.duration) / 1000,
-                  scriptBlockId: 'unknown', // Will be set later
-                });
+              const timingParams = {
+                ...params,
+                OutputFormat: 'json',
+              };
+              const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
+              const timingData = timingResult.AudioStream.toString('utf-8');
+              
+              // Parse timing marks (each line is a JSON object)
+              const lines = timingData.split('\n').filter((line: string) => line.trim());
+              
+              for (const line of lines) {
+                try {
+                  const mark = JSON.parse(line);
+                  if (mark.type === 'word') {
+                    wordTimings.push({
+                      word: mark.value,
+                      startTime: mark.time / 1000, // Convert ms to seconds
+                      endTime: (mark.time + (mark.duration || 0)) / 1000,
+                      scriptBlockId: 'unknown', // Will be set later
+                    });
+                  }
+                } catch (e) {
+                  logger.warn('Failed to parse timing mark', { line: line as string });
+                }
               }
-            } catch (e) {
-              logger.warn('Failed to parse timing mark', { line: line as string });
+
+              // Calculate duration from last word timing
+              duration = wordTimings.length > 0
+                ? wordTimings[wordTimings.length - 1].endTime
+                : 0;
+            } catch (timingError) {
+              logger.warn('Failed to get word timings, will estimate', { error: timingError });
+              // Fall through to estimation
             }
           }
 
-          // Calculate duration from last word timing
-          const duration = wordTimings.length > 0
-            ? wordTimings[wordTimings.length - 1].endTime
-            : 0;
+          // If we don't have timings (generative engine or timing fetch failed), estimate them
+          if (wordTimings.length === 0) {
+            logger.info('Estimating word timings based on voice speed');
+            wordTimings = this.estimateWordTimings(text, voiceConfig.speed);
+            duration = wordTimings.length > 0
+              ? wordTimings[wordTimings.length - 1].endTime
+              : 0;
+          }
 
           return {
             audioBuffer,
@@ -172,6 +217,34 @@ export class PollyTTSProvider implements TTSProvider {
       { maxAttempts: 3, initialDelayMs: 1000 },
       { failureThreshold: 5, timeout: 60000 }
     );
+  }
+
+  /**
+   * Estimate word timings when actual timings are not available
+   * Used for generative engine or when timing fetch fails
+   */
+  private estimateWordTimings(text: string, speed: number): WordTiming[] {
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const wordTimings: WordTiming[] = [];
+    
+    // Calculate timing based on voice speed
+    // Base rate: 155 words per minute
+    const wordsPerMinute = 155 * speed;
+    const secondsPerWord = 60 / wordsPerMinute;
+    
+    let currentTime = 0;
+    for (const word of words) {
+      const wordDuration = secondsPerWord;
+      wordTimings.push({
+        word: word.replace(/[.,!?;:]$/, ''), // Remove trailing punctuation
+        startTime: currentTime,
+        endTime: currentTime + wordDuration,
+        scriptBlockId: 'unknown', // Will be set later
+      });
+      currentTime += wordDuration;
+    }
+    
+    return wordTimings;
   }
 }
 

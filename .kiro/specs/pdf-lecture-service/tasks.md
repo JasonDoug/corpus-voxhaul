@@ -651,73 +651,99 @@ ty 8: Formula explanation**
     - _Requirements: All_
 
 - [ ] 21. Deployment and Production Rollout
-  - [ ] 21.1 Prepare production environment
-    - Set up AWS account and configure credentials
-    - Create production S3 buckets with encryption
-    - Create production DynamoDB tables with auto-scaling
-    - Configure CloudWatch log groups and alarms
-    - Set up API Gateway with custom domain
-    - Configure environment variables for production
-    - Set up API keys for LLM services (OpenRouter/OpenAI/Anthropic)
-    - Set up API keys for TTS service
+  - [ ] 21.1 Verify AWS credentials and prerequisites
+    - Run: `aws --version` to verify AWS CLI installed
+    - Run: `sam --version` to verify SAM CLI installed
+    - Run: `export AWS_PROFILE=admin` to set AWS profile
+    - Run: `aws sts get-caller-identity` to verify credentials work
+    - Verify output shows your AWS account ID and user ARN
+    - Run: `node --version` to verify Node.js 20.x
+    - _Requirements: 9.1_
+  - [ ] 21.2 Configure API keys for LLM and TTS
+    - Get OpenRouter API key from https://openrouter.ai/keys (free tier available)
+    - Run: `export OPENROUTER_API_KEY="sk-or-v1-your-key-here"` with your actual key
+    - Verify key works: `curl https://openrouter.ai/api/v1/models -H "Authorization: Bearer $OPENROUTER_API_KEY"`
+    - Should see list of available models in response
+    - Note: TTS will use AWS Polly (no separate key needed)
+    - _Requirements: 9.1_
+  - [ ] 21.3 Build and validate application
+    - Run: `npm install` to ensure all dependencies installed
+    - Run: `npm run build` to compile TypeScript
+    - Verify build completes without errors
+    - Run: `npm run bundle` to bundle Lambda functions
+    - Verify dist/ directory contains bundled functions
+    - Run: `sam validate --lint` to validate SAM template
+    - Should see: "template.yaml is a valid SAM Template"
+    - _Requirements: 9.1_
+  - [ ] 21.4 Deploy to development environment
+    - Run: `sam build` to build SAM application
+    - Verify build completes successfully
+    - Run: `sam deploy --config-env default --parameter-overrides "Stage=dev OpenRouterApiKey=$OPENROUTER_API_KEY LLMProvider=openrouter"`
+    - Confirm changeset when prompted (type 'y')
+    - Wait for deployment to complete (5-10 minutes)
+    - Verify output shows: "Successfully created/updated stack - pdf-lecture-service-dev"
+    - Save the API endpoint from outputs
+    - _Requirements: 9.1, 9.2_
+  - [ ] 21.5 Verify AWS resources created
+    - Run: `aws cloudformation describe-stacks --stack-name pdf-lecture-service-dev --query 'Stacks[0].Outputs'`
+    - Verify outputs include: ApiEndpoint, PDFBucketName, AudioBucketName
+    - Run: `aws lambda list-functions --query 'Functions[?starts_with(FunctionName, \`pdf-lecture-service-dev\`)].FunctionName'`
+    - Should see 6 Lambda functions (Upload, Analyzer, Segmenter, Script, Audio, Status)
+    - Run: `aws dynamodb list-tables --query 'TableNames[?starts_with(@, \`pdf-lecture-service-dev\`)]'`
+    - Should see 3 DynamoDB tables (jobs, agents, content)
     - _Requirements: 9.1, 9.3_
-  - [ ] 21.2 Deploy to staging environment
-    - Package Lambda functions with dependencies
-    - Deploy using AWS SAM or Serverless Framework
-    - Verify all Lambda functions are deployed correctly
-    - Verify API Gateway endpoints are accessible
-    - Verify DynamoDB tables are created
-    - Verify S3 buckets are accessible
-    - Run smoke tests against staging endpoints
-    - _Requirements: 9.1, 9.2, 9.3_
-  - [ ] 21.3 Run integration tests against staging
-    - Upload test PDF to staging environment
-    - Monitor complete pipeline execution
-    - Verify all stages complete successfully
-    - Verify audio and playback work correctly
-    - Test error scenarios (invalid inputs, API failures)
-    - Verify logging and metrics are captured
-    - _Requirements: 9.2, 9.5_
-  - [ ] 21.4 Performance testing in staging
-    - Run load tests with multiple concurrent uploads
-    - Measure Lambda cold start times
-    - Measure end-to-end processing times
-    - Verify auto-scaling works correctly
-    - Monitor API costs during load test
-    - Identify and address performance bottlenecks
-    - _Requirements: 9.3_
-  - [ ] 21.5 Set up monitoring and alerting
-    - Configure CloudWatch dashboards for key metrics
-    - Set up alarms for error rates (>5%)
-    - Set up alarms for processing time (>10 minutes)
-    - Set up alarms for API failures
-    - Set up alarms for storage quota
-    - Configure SNS notifications for critical alerts
-    - Test alert delivery
+  - [ ] 21.6 Create and configure API key
+    - Run: `aws apigateway create-api-key --name "pdf-lecture-dev-key" --enabled --region us-west-2`
+    - Save the 'id' from the response
+    - Run: `aws apigateway get-api-key --api-key <id-from-above> --include-value --region us-west-2`
+    - Save the 'value' field - this is your API key
+    - Run: `export API_KEY="<value-from-above>"`
+    - Run: `export API_ENDPOINT="<endpoint-from-21.5>"`
+    - _Requirements: 9.1_
+  - [ ] 21.7 Test deployment with status endpoint
+    - Run: `curl -X GET "$API_ENDPOINT/status/test-job-id" -H "x-api-key: $API_KEY"`
+    - Should return 404 with error message (expected - job doesn't exist)
+    - This confirms API Gateway and Lambda are working
+    - Check CloudWatch logs: `sam logs -n StatusFunction --stack-name pdf-lecture-service-dev --tail`
+    - Should see log entry for the status request
     - _Requirements: 9.2_
-  - [ ] 21.6 Deploy to production
-    - Review staging test results
-    - Get approval for production deployment
-    - Deploy to production using blue-green deployment
-    - Verify all services are healthy
-    - Run smoke tests against production
-    - Monitor error rates and performance
-    - _Requirements: 9.1, 9.2, 9.3_
-  - [ ] 21.7 Gradual production rollout
-    - Enable for 10% of traffic (canary deployment)
-    - Monitor for 24 hours
-    - Check error rates, processing times, costs
-    - Review generated content quality
-    - Increase to 50% if stable
-    - Monitor for 24 hours
-    - Increase to 100% if stable
+  - [ ] 21.8 Create a default lecture agent
+    - Create agent.json file with agent configuration (see PRE_DEPLOYMENT_CHECKLIST.md for example)
+    - Run: `curl -X POST "$API_ENDPOINT/agents" -H "Content-Type: application/json" -H "x-api-key: $API_KEY" -d @agent.json`
+    - Should return 201 with agent details including 'id'
+    - Save the agent ID: `export AGENT_ID="<id-from-response>"`
+    - Verify agent created: `curl -X GET "$API_ENDPOINT/agents" -H "x-api-key: $API_KEY"`
+    - Should see your agent in the list
+    - _Requirements: 4.1_
+  - [ ] 21.9 Test complete pipeline with sample PDF
+    - Create a simple test PDF or use existing one
+    - Upload PDF: Use curl or Postman to POST to /upload endpoint with PDF file
+    - Get job ID from response
+    - Monitor job: `curl -X GET "$API_ENDPOINT/status/<job-id>" -H "x-api-key: $API_KEY"`
+    - Watch CloudWatch logs: `sam logs --stack-name pdf-lecture-service-dev --tail`
+    - Wait for job to complete (may take 2-5 minutes)
+    - Verify final status is 'completed'
+    - _Requirements: 1.1, 1.5, 9.2_
+  - [ ] 21.10 Verify monitoring and logs
+    - Check CloudWatch log groups exist: `aws logs describe-log-groups --log-group-name-prefix /aws/lambda/pdf-lecture-service-dev`
+    - Should see 6 log groups (one per Lambda function)
+    - Check for errors: `aws logs filter-log-events --log-group-name /aws/lambda/pdf-lecture-service-dev-UploadFunction --filter-pattern "ERROR"`
+    - Should see no errors (or only expected test errors)
+    - Check CloudWatch alarms: `aws cloudwatch describe-alarms --alarm-name-prefix pdf-lecture-service-dev`
+    - Should see alarms for timeouts and error rates
+    - _Requirements: 9.2_
+  - [ ] 21.11 Document deployment details
+    - Save API endpoint to a secure location
+    - Save API key to a secure location (password manager)
+    - Document agent ID for future reference
+    - Note any issues encountered during deployment
+    - Update team documentation with deployment details
+    - _Requirements: 9.1_
+  - [ ] 21.12 Set up billing alerts (optional but recommended)
+    - Run: `aws cloudwatch put-metric-alarm --alarm-name billing-alert-dev --alarm-description "Alert when dev costs exceed $50" --metric-name EstimatedCharges --namespace AWS/Billing --statistic Maximum --period 21600 --evaluation-periods 1 --threshold 50 --comparison-operator GreaterThanThreshold`
+    - Verify alarm created: `aws cloudwatch describe-alarms --alarm-names billing-alert-dev`
+    - Consider setting up SNS topic for email notifications
     - _Requirements: 9.3_
-  - [ ] 21.8 Post-deployment validation
-    - Process 10+ real scientific PDFs in production
-    - Verify quality of segmentation, scripts, and audio
-    - Gather user feedback on lecture quality
-    - Monitor API costs and optimize if needed
-    - Monitor processing times and optimize if needed
     - Document any issues or improvements needed
     - _Requirements: All_
   - [ ] 21.9 Set up backup and disaster recovery
