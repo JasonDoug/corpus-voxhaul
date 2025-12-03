@@ -128,17 +128,35 @@ Each stage is implemented as an independent serverless function for scalability.
 
 ## Known Limitations
 
-### Image Extraction (Implementation Gap)
+⚠️ **IMPORTANT**: The system has excellent infrastructure but **3 critical components use placeholder implementations**:
 
-The Content Analyzer currently uses **placeholder image data** instead of extracting actual images from PDFs. The vision LLM integration is fully functional, but needs real image data to produce meaningful figure descriptions.
+### 1. Content Segmentation (Critical)
 
-**Status**: Vision API integration complete ✅ | Image extraction incomplete ❌
+**Status**: ❌ Uses mock LLM responses  
+**Impact**: All PDFs get identical segmentation structure regardless of content  
+**File**: `src/services/segmenter.ts`
 
-**Impact**: Figure descriptions will be generic placeholders until image extraction is implemented.
+### 2. Script Generation (Critical)
 
-**Solution**: See [docs/IMAGE_EXTRACTION_TODO.md](docs/IMAGE_EXTRACTION_TODO.md) for detailed implementation guide with three different approaches (quick win vs. production-ready).
+**Status**: ❌ Uses mock LLM responses  
+**Impact**: All scripts are identical generic text, ignoring content and agent personality  
+**File**: `src/services/script-generator.ts`
 
-**Estimated effort**: 2-4 hours (quick win) or 1-2 days (production quality)
+### 3. Image Extraction (High Priority)
+
+**Status**: ❌ Uses placeholder image data  
+**Impact**: Figure descriptions are meaningless (vision LLM receives placeholders)  
+**File**: `src/services/analyzer.ts`
+
+---
+
+**Complete Analysis**: See [docs/MISSING_IMPLEMENTATIONS.md](docs/MISSING_IMPLEMENTATIONS.md) for:
+- Detailed explanation of each gap
+- Code examples for fixes
+- Implementation effort estimates (16-28 hours total)
+- Requirements coverage analysis
+
+**Current State**: Infrastructure 100% ✅ | Core Pipeline 60% ⚠️
 
 ## Quick Links
 

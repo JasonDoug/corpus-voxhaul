@@ -1,0 +1,239 @@
+# Implementation Plan
+
+**Parent Project**: PDF Lecture Service (`.kiro/specs/pdf-lecture-service/`)  
+**Context**: This is a subset spec addressing 3 specific LLM integrations in an otherwise complete system.
+
+**What Already Exists**:
+- ✅ Full project infrastructure (database, storage, API endpoints)
+- ✅ LLM service with OpenRouter/OpenAI/Anthropic support
+- ✅ Vision LLM integration (just needs real images)
+- ✅ Agent management, audio synthesis, playback interface
+- ✅ Test framework (Jest + fast-check)
+- ✅ Deployment configuration (AWS SAM)
+- ✅ 17 passing unit tests + property-based tests
+
+**What This Spec Implements**:
+- ❌ Real LLM calls for segmentation (currently mock)
+- ❌ Real LLM calls for script generation (currently mock)
+- ❌ Real image extraction from PDFs (currently placeholder)
+
+**Testing Note**: Only add tests for the 3 new integrations. Don't modify existing 17 tests unless necessary.
+
+**Documentation Note**: Update existing docs (IMPLEMENTATION_STATUS.md, MISSING_IMPLEMENTATIONS.md) rather than creating new ones.
+
+**Deployment Note**: Use existing deployment infrastructure. Only add feature flags for gradual rollout.
+
+---
+
+- [ ] 1. Implement Content Segmentation LLM Integration
+  - [ ] 1.1 Update callSegmentationLLM function
+    - Import llmService and getRecommendedModel
+    - Replace placeholder implementation with real LLM API call
+    - Build system prompt with segmentation instructions
+    - Parse and validate JSON response
+    - Add error handling with retry logic
+    - _Requirements: 1.1, 1.2, 1.5_
+  - [ ] 1.2 Enhance prompt construction
+    - Build comprehensive prompt with page summaries
+    - Include figure, table, and formula inventory
+    - Add citation context
+    - Format for optimal LLM understanding
+    - _Requirements: 1.1_
+  - [ ] 1.3 Add response validation
+    - Validate segments array exists
+    - Validate each segment has required fields
+    - Validate contentIndices structure
+    - Validate prerequisites are valid indices
+    - _Requirements: 1.2_
+  - [ ] 1.4 Add comprehensive error handling
+    - Handle JSON parsing errors
+    - Handle invalid response structure
+    - Handle API failures with retry
+    - Log detailed error information
+    - _Requirements: 1.4, 4.1, 4.2, 4.3, 4.4_
+  - [ ] 1.5 Write unit tests for segmentation
+    - Test prompt construction
+    - Test JSON parsing with valid responses
+    - Test validation logic
+    - Test error handling
+    - Mock LLM service
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [ ] 1.6 Write integration test for segmentation
+    - Test with real LLM API
+    - Verify different PDFs produce different segments
+    - Verify segment structure is valid
+    - _Requirements: 1.3, 5.1_
+
+- [ ] 2. Implement Script Generation LLM Integration
+  - [ ] 2.1 Update callScriptGenerationLLM function signature
+    - Add agent parameter to function
+    - Import llmService and getRecommendedModel
+    - Update all call sites to pass agent
+    - _Requirements: 2.1_
+  - [ ] 2.2 Implement buildScriptSystemPrompt function
+    - Create base system prompt
+    - Incorporate agent personality instructions
+    - Add tone-specific guidance for humorous agents
+    - Add tone-specific guidance for serious agents
+    - Handle all personality tone types
+    - _Requirements: 2.2, 2.4, 2.5_
+  - [ ] 2.3 Replace placeholder implementation
+    - Call llmService.chat with agent-specific prompt
+    - Use higher temperature (0.8) for creativity
+    - Parse response content
+    - Add error handling with retry logic
+    - _Requirements: 2.1, 2.6, 2.7_
+  - [ ] 2.4 Enhance segment prompt construction
+    - Include segment content
+    - Include visual element descriptions
+    - Add context about segment position
+    - Add length guidance
+    - _Requirements: 2.3_
+  - [ ] 2.5 Write unit tests for script generation
+    - Test system prompt construction for different agents
+    - Test prompt construction with various segments
+    - Test error handling
+    - Mock LLM service
+    - _Requirements: 2.1, 2.2, 2.4, 2.5_
+  - [ ] 2.6 Write integration test for script generation
+    - Test with real LLM API
+    - Generate scripts with humorous agent
+    - Generate scripts with serious agent
+    - Verify personality differences
+    - Verify content-specific references
+    - _Requirements: 2.2, 2.3, 2.4, 2.5, 5.2_
+
+- [ ] 3. Implement Image Extraction (Quick Win Approach)
+  - [ ] 3.1 Install pdf-img-convert dependency
+    - Add pdf-img-convert to package.json
+    - Run npm install
+    - Verify installation
+    - _Requirements: 3.1_
+  - [ ] 3.2 Implement extractImageFromPDF function
+    - Import pdf-img-convert
+    - Convert specific page to image
+    - Return base64-encoded image data
+    - Add error handling
+    - Log extraction success/failure
+    - _Requirements: 3.1, 3.2, 3.5_
+  - [ ] 3.3 Implement optimizeImageForVisionAPI function
+    - Check image size
+    - Resize if larger than 2000x2000
+    - Compress to reduce token usage
+    - Return optimized image data
+    - _Requirements: 3.3_
+  - [ ] 3.4 Update analyzeFigures function
+    - Replace placeholder image data with extractImageFromPDF call
+    - Handle extraction errors gracefully
+    - Continue processing other figures if one fails
+    - Log extraction metrics
+    - _Requirements: 3.1, 3.4, 3.5_
+  - [ ] 3.5 Write unit tests for image extraction
+    - Test with PDFs containing images
+    - Test with PDFs without images
+    - Test error handling
+    - Test optimization logic
+    - _Requirements: 3.1, 3.5_
+  - [ ] 3.6 Write integration test for image extraction
+    - Extract images from real scientific PDF
+    - Verify vision LLM can analyze extracted images
+    - Verify descriptions are meaningful
+    - _Requirements: 3.4, 5.3_
+
+- [ ] 4. Add Monitoring and Observability
+  - [ ] 4.1 Add LLM call metrics
+    - Track API success rate
+    - Track response times
+    - Track token usage
+    - Track costs per PDF
+    - _Requirements: 4.5_
+  - [ ] 4.2 Add structured logging
+    - Log all LLM requests with correlation IDs
+    - Log response times and token counts
+    - Log errors with full context
+    - _Requirements: 4.2_
+  - [ ] 4.3 Add feature flags
+    - Add ENABLE_REAL_SEGMENTATION flag
+    - Add ENABLE_REAL_SCRIPT_GENERATION flag
+    - Add ENABLE_IMAGE_EXTRACTION flag
+    - Allow gradual rollout
+    - _Requirements: 1.1, 2.1, 3.1_
+
+- [ ] 5. Update Tests and Documentation
+  - [ ] 5.1 Update existing test mocks
+    - Update segmenter test mocks to match real LLM responses
+    - Update script generator test mocks to match real LLM responses
+    - Ensure all tests still pass
+    - _Requirements: 5.1, 5.2, 5.5_
+  - [ ] 5.2 Update existing API documentation
+    - Update docs/API.md with new LLM behavior
+    - Document expected response times
+    - Document API costs
+    - Note: Don't create new docs, update existing ones
+    - _Requirements: 5.1, 5.2_
+  - [ ] 5.3 Update existing implementation status docs
+    - Update docs/IMPLEMENTATION_STATUS.md
+    - Update docs/MISSING_IMPLEMENTATIONS.md
+    - Mark all three components as complete
+    - Update overall completion percentage to 100%
+    - Note: These docs already exist, just update them
+    - _Requirements: 5.1, 5.2, 5.3_
+
+- [ ] 6. End-to-End Testing and Validation
+  - [ ] 6.1 Test complete pipeline with real PDF
+    - Upload a scientific PDF
+    - Verify segmentation produces logical topics
+    - Verify scripts reflect actual content
+    - Verify figure descriptions are meaningful
+    - Verify audio generation works
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [ ] 6.2 Test with multiple agent personalities
+    - Generate lecture with humorous agent
+    - Generate lecture with serious agent
+    - Verify personality differences in scripts
+    - Verify audio reflects personality
+    - _Requirements: 5.2_
+  - [ ] 6.3 Test with various PDF types
+    - Test with short paper (5 pages)
+    - Test with long paper (20+ pages)
+    - Test with many figures
+    - Test with many formulas
+    - Verify quality across all types
+    - _Requirements: 5.1, 5.3_
+  - [ ] 6.4 Performance and cost validation
+    - Measure processing time increase
+    - Measure API costs per PDF
+    - Verify costs are under $0.50 per PDF
+    - Verify processing time increase is under 60 seconds
+    - _Requirements: 5.1, 5.2, 5.3_
+
+- [ ] 7. Deployment and Rollout
+  - Note: Use existing deployment infrastructure from parent project
+  - [ ] 7.1 Deploy to existing staging environment
+    - Deploy updated code using existing AWS SAM configuration
+    - Add new environment variables to existing .env
+    - Enable feature flags at 100%
+    - Test end-to-end using existing test infrastructure
+    - _Requirements: 1.1, 2.1, 3.1_
+  - [ ] 7.2 Monitor staging performance
+    - Use existing CloudWatch dashboards
+    - Monitor API success rates
+    - Monitor response times
+    - Monitor costs
+    - Review generated content quality
+    - _Requirements: 4.5_
+  - [ ] 7.3 Gradual production rollout
+    - Use existing deployment pipeline
+    - Enable for 10% of production traffic
+    - Monitor for 24 hours
+    - Increase to 50% if stable
+    - Monitor for 24 hours
+    - Increase to 100% if stable
+    - _Requirements: 1.1, 2.1, 3.1_
+  - [ ] 7.4 Remove placeholder code
+    - Remove mock implementations from segmenter.ts
+    - Remove mock implementations from script-generator.ts
+    - Remove placeholder image code from analyzer.ts
+    - Remove feature flags after stable
+    - Update docs/MISSING_IMPLEMENTATIONS.md to mark as complete
+    - _Requirements: 1.1, 2.1, 3.1_

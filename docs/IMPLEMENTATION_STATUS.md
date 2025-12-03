@@ -2,9 +2,16 @@
 
 Last Updated: December 2, 2024
 
-## Overall Status: 🟡 Mostly Complete (95%)
+## Overall Status: 🟡 Partially Complete (60%)
 
-The PDF Lecture Service is **fully functional** with one known gap in image extraction.
+The PDF Lecture Service has **excellent infrastructure** but **3 critical components use placeholder implementations** instead of real API calls.
+
+### Critical Gaps
+1. ❌ **Content Segmentation** - Uses mock LLM responses (all PDFs get same structure)
+2. ❌ **Script Generation** - Uses mock LLM responses (all scripts are identical)
+3. ❌ **Image Extraction** - Uses placeholder images (vision LLM can't analyze)
+
+**See [MISSING_IMPLEMENTATIONS.md](MISSING_IMPLEMENTATIONS.md) for complete analysis and implementation guide.**
 
 ---
 
@@ -125,10 +132,41 @@ The PDF Lecture Service is **fully functional** with one known gap in image extr
 
 ---
 
+### ❌ Not Implemented (Using Placeholders)
+
+#### 1. Content Segmentation LLM
+
+**File**: `src/services/segmenter.ts` (line 373)  
+**Status**: ❌ Using mock/placeholder LLM response  
+**Impact**: **CRITICAL** - All PDFs get identical segmentation structure
+
+**What's Missing**:
+- Real LLM API call to analyze content
+- Prompt construction with extracted content
+- JSON response parsing
+- All PDFs currently get same mock segments regardless of content
+
+**Requirements NOT MET**: 3.1, 3.2, 3.3, 3.4, 3.5
+
+#### 2. Script Generation LLM
+
+**File**: `src/services/script-generator.ts` (line 469)  
+**Status**: ❌ Using mock/placeholder LLM response  
+**Impact**: **CRITICAL** - All scripts are identical generic text
+
+**What's Missing**:
+- Real LLM API call to generate scripts
+- Agent personality integration
+- Content-specific script generation
+- All scripts currently use same mock text regardless of content or agent
+
+**Requirements NOT MET**: 5.1, 5.2, 5.3, 5.4, 5.5
+
 ### ⚠️ Partially Implemented
 
-#### Content Analysis - Image Extraction
+#### 3. Content Analysis - Image Extraction
 
+**File**: `src/services/analyzer.ts` (line 165)  
 **Status**: Vision LLM integration complete ✅ | Image extraction incomplete ❌
 
 **What Works**:
