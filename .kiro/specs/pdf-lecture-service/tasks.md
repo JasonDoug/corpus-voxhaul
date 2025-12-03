@@ -650,8 +650,8 @@ ty 8: Formula explanation**
     - Document any property failures or edge cases discovered
     - _Requirements: All_
 
-- [ ] 21. Deployment and Production Rollout
-  - [ ] 21.1 Verify AWS credentials and prerequisites
+- [-] 21. Deployment and Production Rollout
+  - [x] 21.1 Verify AWS credentials and prerequisites
     - Run: `aws --version` to verify AWS CLI installed
     - Run: `sam --version` to verify SAM CLI installed
     - Run: `export AWS_PROFILE=admin` to set AWS profile
@@ -659,14 +659,14 @@ ty 8: Formula explanation**
     - Verify output shows your AWS account ID and user ARN
     - Run: `node --version` to verify Node.js 20.x
     - _Requirements: 9.1_
-  - [ ] 21.2 Configure API keys for LLM and TTS
+  - [x] 21.2 Configure API keys for LLM and TTS
     - Get OpenRouter API key from https://openrouter.ai/keys (free tier available)
     - Run: `export OPENROUTER_API_KEY="sk-or-v1-your-key-here"` with your actual key
     - Verify key works: `curl https://openrouter.ai/api/v1/models -H "Authorization: Bearer $OPENROUTER_API_KEY"`
     - Should see list of available models in response
     - Note: TTS will use AWS Polly (no separate key needed)
     - _Requirements: 9.1_
-  - [ ] 21.3 Build and validate application
+  - [x] 21.3 Build and validate application
     - Run: `npm install` to ensure all dependencies installed
     - Run: `npm run build` to compile TypeScript
     - Verify build completes without errors
@@ -675,7 +675,7 @@ ty 8: Formula explanation**
     - Run: `sam validate --lint` to validate SAM template
     - Should see: "template.yaml is a valid SAM Template"
     - _Requirements: 9.1_
-  - [ ] 21.4 Deploy to development environment
+  - [x] 21.4 Deploy to development environment
     - Run: `sam build` to build SAM application
     - Verify build completes successfully
     - Run: `sam deploy --config-env default --parameter-overrides "Stage=dev OpenRouterApiKey=$OPENROUTER_API_KEY LLMProvider=openrouter"`
@@ -684,7 +684,7 @@ ty 8: Formula explanation**
     - Verify output shows: "Successfully created/updated stack - pdf-lecture-service-dev"
     - Save the API endpoint from outputs
     - _Requirements: 9.1, 9.2_
-  - [ ] 21.5 Verify AWS resources created
+  - [x] 21.5 Verify AWS resources created
     - Run: `aws cloudformation describe-stacks --stack-name pdf-lecture-service-dev --query 'Stacks[0].Outputs'`
     - Verify outputs include: ApiEndpoint, PDFBucketName, AudioBucketName
     - Run: `aws lambda list-functions --query 'Functions[?starts_with(FunctionName, \`pdf-lecture-service-dev\`)].FunctionName'`

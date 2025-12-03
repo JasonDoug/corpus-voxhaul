@@ -10,6 +10,13 @@ dist/
 # Environment
 .env
 .env.local
+.env.production
+.env.*.local
+
+# AWS credentials (should never be committed)
+.aws/
+aws-credentials.txt
+*credentials*.txt
 
 # IDE
 .vscode/
