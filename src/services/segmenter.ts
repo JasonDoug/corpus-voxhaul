@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { ExtractedContent, SegmentedContent, ContentSegment, ContentBlock } from '../models/content';
 import { llmService, getRecommendedModel } from './llm';
+import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -520,20 +521,24 @@ async function mockSegmentationLLM(_prompt: string): Promise<LLMSegmentationResp
  * Uses the existing LLM service to analyze content and create logical segments
  * Exported for testing purposes
  */
-export async function callSegmentationLLM(prompt: string): Promise<LLMSegmentationResponse> {
+export async function callSegmentationLLM(prompt: string, correlationId?: string): Promise<LLMSegmentationResponse> {
   // Check feature flag
   if (!config.featureFlags.enableRealSegmentation) {
-    logger.info('Real segmentation disabled by feature flag, using mock implementation');
+    logger.info('Real segmentation disabled by feature flag, using mock implementation', {
+      correlationId,
+    });
     return mockSegmentationLLM(prompt);
   }
   
   const startTime = Date.now();
+  const requestId = correlationId || uuidv4();
   let model: string | undefined;
   
   try {
     model = getRecommendedModel('segmentation', llmService.getProvider());
     
     logger.info('Calling LLM for content segmentation', {
+      correlationId: requestId,
       model,
       provider: llmService.getProvider(),
       promptLength: prompt.length,
@@ -585,11 +590,28 @@ Respond ONLY with valid JSON, no additional text.`,
     const apiCallDuration = Date.now() - startTime;
     
     logger.info('LLM API call completed', {
+      correlationId: requestId,
       model,
       duration: apiCallDuration,
       responseLength: response.content.length,
       tokensUsed: response.usage?.totalTokens,
+      promptTokens: response.usage?.promptTokens,
+      completionTokens: response.usage?.completionTokens,
     });
+    
+    // Record operation-specific metrics
+    if (response.usage) {
+      recordLLMCallMetrics({
+        operation: 'segmentation',
+        model: response.model,
+        provider: llmService.getProvider(),
+        promptTokens: response.usage.promptTokens,
+        completionTokens: response.usage.completionTokens,
+        totalTokens: response.usage.totalTokens,
+        durationMs: apiCallDuration,
+        success: true,
+      });
+    }
     
     // Parse JSON response
     let segmentationData: LLMSegmentationResponse;
@@ -894,6 +916,7 @@ Respond ONLY with valid JSON, no additional text.`,
     const totalDuration = Date.now() - startTime;
     
     logger.info('Segmentation completed successfully', {
+      correlationId: requestId,
       segmentCount: segmentationData.segments.length,
       model,
       totalDuration,
@@ -909,7 +932,21 @@ Respond ONLY with valid JSON, no additional text.`,
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     
+    // Record failure metrics
+    recordLLMCallMetrics({
+      operation: 'segmentation',
+      model: model || 'unknown',
+      provider: llmService.getProvider(),
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      durationMs: totalDuration,
+      success: false,
+      errorType,
+    });
+    
     logger.error('Segmentation LLM call failed', {
+      correlationId: requestId,
       errorType,
       errorMessage,
       errorStack,
@@ -973,9 +1010,13 @@ function categorizeSegmentationError(error: any): string {
  */
 export async function segmentContent(jobId: string): Promise<SegmentedContent> {
   const startTime = Date.now();
+  const correlationId = `seg-${jobId}-${uuidv4()}`;
   
   try {
-    logger.info('Starting content segmentation', { jobId });
+    logger.info('Starting content segmentation', { 
+      jobId,
+      correlationId,
+    });
     
     // Import dynamodb functions here to avoid circular dependencies
     const { getContent, updateContent } = require('./dynamodb');
@@ -1037,10 +1078,11 @@ export async function segmentContent(jobId: string): Promise<SegmentedContent> {
     // Call LLM for segmentation (includes retry logic)
     let llmResponse: LLMSegmentationResponse;
     try {
-      llmResponse = await callSegmentationLLM(prompt);
+      llmResponse = await callSegmentationLLM(prompt, correlationId);
     } catch (llmError) {
       logger.error('LLM segmentation call failed after retries', {
         jobId,
+        correlationId,
         error: llmError,
         errorMessage: llmError instanceof Error ? llmError.message : 'Unknown error',
       });

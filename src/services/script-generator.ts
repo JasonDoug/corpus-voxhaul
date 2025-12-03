@@ -5,6 +5,7 @@ import { LectureAgent } from '../models/agent';
 import { ContentSegment, Figure, Table, Formula } from '../models/content';
 import { LectureScript, ScriptSegment, ScriptBlock } from '../models/script';
 import { llmService, getRecommendedModel } from './llm';
+import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -588,17 +589,29 @@ Let's dive into the details and see what we can learn from this fascinating rese
 /**
  * Call LLM API to generate script for a segment
  */
-async function callScriptGenerationLLM(prompt: string, agent: LectureAgent): Promise<string> {
+async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, correlationId?: string): Promise<string> {
   // Check feature flag
   if (!config.featureFlags.enableRealScriptGeneration) {
-    logger.info('Real script generation disabled by feature flag, using mock implementation');
+    logger.info('Real script generation disabled by feature flag, using mock implementation', {
+      correlationId,
+      agentId: agent.id,
+    });
     return mockScriptGenerationLLM(prompt, agent);
   }
   
+  const startTime = Date.now();
+  const requestId = correlationId || uuidv4();
+  let model: string | undefined;
+  
   try {
-    const model = getRecommendedModel('script', llmService.getProvider());
+    model = getRecommendedModel('script', llmService.getProvider());
     
-    logger.info('Calling LLM for script generation', { model, agentId: agent.id });
+    logger.info('Calling LLM for script generation', { 
+      correlationId: requestId,
+      model, 
+      agentId: agent.id,
+      agentTone: agent.personality.tone,
+    });
     
     // Build personality-specific system prompt
     const systemPrompt = buildScriptSystemPrompt(agent);
@@ -619,13 +632,57 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent): Pro
       maxTokens: 2000,
     });
     
+    const duration = Date.now() - startTime;
+    
     logger.info('Script generation completed successfully', {
+      correlationId: requestId,
       scriptLength: response.content.length,
+      duration,
+      tokensUsed: response.usage?.totalTokens,
+      promptTokens: response.usage?.promptTokens,
+      completionTokens: response.usage?.completionTokens,
+      agentId: agent.id,
     });
+    
+    // Record operation-specific metrics
+    if (response.usage) {
+      recordLLMCallMetrics({
+        operation: 'script_generation',
+        model: response.model,
+        provider: llmService.getProvider(),
+        promptTokens: response.usage.promptTokens,
+        completionTokens: response.usage.completionTokens,
+        totalTokens: response.usage.totalTokens,
+        durationMs: duration,
+        success: true,
+      });
+    }
     
     return response.content;
   } catch (error) {
-    logger.error('Script generation LLM call failed', { error, agentId: agent.id });
+    const duration = Date.now() - startTime;
+    
+    // Record failure metrics
+    recordLLMCallMetrics({
+      operation: 'script_generation',
+      model: model || 'unknown',
+      provider: llmService.getProvider(),
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      durationMs: duration,
+      success: false,
+      errorType: error instanceof Error ? error.message : 'Unknown error',
+    });
+    
+    logger.error('Script generation LLM call failed', { 
+      correlationId: requestId,
+      error, 
+      agentId: agent.id, 
+      duration,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     throw new Error(`Failed to generate script: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -637,19 +694,25 @@ async function generateScriptForSegment(
   segment: ContentSegment,
   agent: LectureAgent,
   segmentIndex: number,
-  totalSegments: number
+  totalSegments: number,
+  correlationId?: string
 ): Promise<ScriptSegment> {
+  const requestId = correlationId || uuidv4();
+  
   logger.info('Generating script for segment', {
+    correlationId: requestId,
     segmentId: segment.id,
     title: segment.title,
     blockCount: segment.contentBlocks.length,
+    segmentIndex,
+    totalSegments,
   });
   
   // Create prompt for this segment
   const prompt = createSegmentPrompt(segment, agent, segmentIndex, totalSegments);
   
   // Call LLM to generate script
-  const scriptText = await callScriptGenerationLLM(prompt, agent);
+  const scriptText = await callScriptGenerationLLM(prompt, agent, requestId);
   
   // Apply personality modifications
   const modifiedScript = applyPersonalityModifications(scriptText, agent);
@@ -694,8 +757,14 @@ async function generateScriptForSegment(
  * Retrieves segmented content and agent, generates script, and stores the result
  */
 export async function generateScript(jobId: string, agentId?: string): Promise<LectureScript> {
+  const correlationId = `script-${jobId}-${uuidv4()}`;
+  
   try {
-    logger.info('Starting script generation', { jobId, agentId });
+    logger.info('Starting script generation', { 
+      jobId, 
+      agentId,
+      correlationId,
+    });
     
     // Import dynamodb functions here to avoid circular dependencies
     const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
@@ -749,7 +818,8 @@ export async function generateScript(jobId: string, agentId?: string): Promise<L
     
     for (let i = 0; i < totalSegments; i++) {
       const segment = segmentedContent.segments[i];
-      const scriptSegment = await generateScriptForSegment(segment, agent, i, totalSegments);
+      const segmentCorrelationId = `${correlationId}-seg${i}`;
+      const scriptSegment = await generateScriptForSegment(segment, agent, i, totalSegments, segmentCorrelationId);
       scriptSegments.push(scriptSegment);
     }
     
@@ -773,13 +843,20 @@ export async function generateScript(jobId: string, agentId?: string): Promise<L
     
     logger.info('Script generation completed', {
       jobId,
+      correlationId,
       segmentCount: scriptSegments.length,
       totalDuration,
     });
     
     return lectureScript;
   } catch (error) {
-    logger.error('Script generation failed', { jobId, error });
+    logger.error('Script generation failed', { 
+      jobId, 
+      correlationId,
+      error,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     throw error;
   }
 }

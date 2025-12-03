@@ -20,6 +20,7 @@ import {
 } from '../models/content';
 import { downloadPDF } from './s3';
 import { llmService, getRecommendedModel } from './llm';
+import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
 // Dynamic imports for modules with ESM/CJS issues
 const { v4: uuidv4 } = require('uuid');
@@ -221,14 +222,22 @@ async function optimizeImageForVisionAPI(base64Image: string): Promise<string> {
  */
 export async function analyzeFigures(
   figurePositions: Array<{ pageNumber: number; id: string }>,
-  pdfBuffer: Buffer
+  pdfBuffer: Buffer,
+  correlationId?: string
 ): Promise<Figure[]> {
-  logger.info('Starting figure analysis', { count: figurePositions.length });
+  const requestId = correlationId || uuidv4();
+  
+  logger.info('Starting figure analysis', { 
+    correlationId: requestId,
+    count: figurePositions.length,
+  });
   
   const figures: Figure[] = [];
   
   for (const position of figurePositions) {
     try {
+      const figureCorrelationId = `${requestId}-fig-${position.id}`;
+      
       // Extract actual image from PDF
       const imageData = await extractImageFromPDF(pdfBuffer, position.pageNumber);
       
@@ -236,7 +245,7 @@ export async function analyzeFigures(
       const optimizedImage = await optimizeImageForVisionAPI(imageData);
       
       // Generate description using vision LLM
-      const description = await generateFigureDescription(optimizedImage, position.pageNumber);
+      const description = await generateFigureDescription(optimizedImage, position.pageNumber, figureCorrelationId);
       
       const figure: Figure = {
         id: position.id,
@@ -272,9 +281,19 @@ export async function analyzeFigures(
 /**
  * Generate description for a figure using vision LLM
  */
-async function generateFigureDescription(imageUrl: string, pageNumber: number): Promise<string> {
+async function generateFigureDescription(imageUrl: string, pageNumber: number, correlationId?: string): Promise<string> {
+  const startTime = Date.now();
+  const requestId = correlationId || uuidv4();
+  let model: string | undefined;
+  
   try {
-    const model = getRecommendedModel('vision', llmService.getProvider());
+    model = getRecommendedModel('vision', llmService.getProvider());
+    
+    logger.info('Calling vision LLM for figure description', {
+      correlationId: requestId,
+      pageNumber,
+      model,
+    });
     
     const prompt = `You are analyzing a scientific figure from a research paper. 
 Describe this figure in detail, explaining:
@@ -291,9 +310,53 @@ Provide a clear, accessible description that would help someone understand the f
       model,
     });
     
+    const duration = Date.now() - startTime;
+    
+    logger.info('Vision LLM call completed', {
+      correlationId: requestId,
+      pageNumber,
+      duration,
+      descriptionLength: description.length,
+    });
+    
+    // Record metrics for vision call
+    // Note: Vision API doesn't always return token counts, so we estimate
+    recordLLMCallMetrics({
+      operation: 'vision_analysis',
+      model: model,
+      provider: llmService.getProvider(),
+      promptTokens: Math.ceil(prompt.length / 4), // Rough estimate: 1 token ≈ 4 chars
+      completionTokens: Math.ceil(description.length / 4),
+      totalTokens: Math.ceil((prompt.length + description.length) / 4),
+      durationMs: duration,
+      success: true,
+    });
+    
     return description;
   } catch (error) {
-    logger.error('Vision LLM call failed for figure description', { pageNumber, error });
+    const duration = Date.now() - startTime;
+    
+    // Record failure metrics
+    recordLLMCallMetrics({
+      operation: 'vision_analysis',
+      model: model || 'unknown',
+      provider: llmService.getProvider(),
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      durationMs: duration,
+      success: false,
+      errorType: error instanceof Error ? error.message : 'Unknown error',
+    });
+    
+    logger.error('Vision LLM call failed for figure description', { 
+      correlationId: requestId,
+      pageNumber, 
+      error, 
+      duration,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     // Fallback to basic description if vision API fails
     return `Figure on page ${pageNumber} (description unavailable - vision API error)`;
   }

@@ -1,376 +1,331 @@
-# Monitoring and Logging Guide
+# LLM Integration Monitoring Guide
 
-This document describes the monitoring and logging infrastructure for the PDF Lecture Service.
+This document describes the monitoring and observability features for LLM API calls in the PDF Lecture Service.
 
 ## Overview
 
-The service implements comprehensive monitoring and logging with:
-- **Structured JSON logging** with correlation IDs and log levels
-- **Metrics collection** for request counts, error rates, processing times, and storage usage
-- **CloudWatch integration** with log groups, metric filters, and alarms
+The system tracks comprehensive metrics for all LLM API calls, including:
+- API success/failure rates
+- Response times
+- Token usage (prompt, completion, and total)
+- Estimated costs per call and per PDF
+- Correlation IDs for request tracing
+
+## Metrics Tracked
+
+### Per-Call Metrics
+
+For each LLM API call, the following metrics are recorded:
+
+1. **Success/Failure Count**
+   - Metric: `LLMCallSuccess` or `LLMCallFailure`
+   - Dimensions: operation, model, provider, success status
+   - Use: Track API reliability
+
+2. **Response Time**
+   - Metric: `LLMCallDuration`
+   - Unit: Milliseconds
+   - Dimensions: operation, model, provider
+   - Use: Monitor API performance
+
+3. **Token Usage**
+   - Metrics: `LLMPromptTokens`, `LLMCompletionTokens`, `LLMTotalTokens`
+   - Unit: Count
+   - Dimensions: operation, model, provider
+   - Use: Track API consumption
+
+4. **Cost**
+   - Metric: `LLMCallCostCents`
+   - Unit: Cents (USD)
+   - Dimensions: operation, model, provider
+   - Use: Monitor spending
+
+### Per-Job Metrics
+
+For each PDF processing job, aggregate metrics are tracked:
+
+1. **Total LLM Calls**
+   - Metric: `JobLLMCalls`
+   - Dimensions: jobId
+   
+2. **Total Tokens Used**
+   - Metric: `JobLLMTokens`
+   - Dimensions: jobId
+   
+3. **Total Cost**
+   - Metric: `JobLLMCostCents`
+   - Dimensions: jobId
+
+## Operations Tracked
+
+The system tracks metrics for these LLM operations:
+
+1. **Segmentation** (`segmentation`)
+   - Analyzes PDF content and creates logical topic segments
+   - Typically 1 call per PDF
+   - Model: Claude 3 Opus (recommended)
+
+2. **Script Generation** (`script_generation`)
+   - Generates lecture scripts with personality
+   - Typically 3-5 calls per PDF (one per segment)
+   - Model: GPT-4 Turbo (recommended)
+
+3. **Vision Analysis** (`vision_analysis`)
+   - Analyzes figures and generates descriptions
+   - Variable calls per PDF (depends on figure count)
+   - Model: GPT-4 Vision (recommended)
+
+4. **Chat** (`chat`)
+   - Generic LLM chat calls
+   - Used for table/formula interpretation
 
 ## Structured Logging
 
-### Log Levels
-
-The logger supports four log levels:
-- `ERROR` - Critical errors that require immediate attention
-- `WARN` - Warning conditions that should be investigated
-- `INFO` - Informational messages about normal operations
-- `DEBUG` - Detailed debugging information
-
-Set the minimum log level via environment variable:
-```bash
-export LOG_LEVEL=INFO  # Default
-```
-
-### Using the Logger
-
-```typescript
-import { logger } from '../utils/logger';
-
-// Set correlation ID for request tracking
-logger.setCorrelationId(requestId);
-logger.setFunctionName('UploadFunction');
-
-// Log messages with metadata
-logger.info('Processing started', { jobId: '123', filename: 'paper.pdf' });
-logger.warn('Retry attempt', { attempt: 2, maxAttempts: 3 });
-logger.error('Processing failed', { error: error.message, stack: error.stack });
-logger.debug('Detailed state', { state: complexObject });
-```
-
-### Sensitive Data Redaction
-
-The logger automatically redacts sensitive fields matching these patterns:
-- `password`, `secret`, `token`, `apikey`, `api_key`
-- `authorization`, `auth`, `credential`
-- `private_key`, `access_key`
-
-Example:
-```typescript
-logger.info('User authenticated', {
-  username: 'john',
-  password: 'secret123',  // Will be redacted as [REDACTED]
-  apiKey: 'abc123'        // Will be redacted as [REDACTED]
-});
-```
+All LLM requests include structured logging with:
 
 ### Correlation IDs
 
-Correlation IDs track requests across multiple functions:
-```typescript
-// In Lambda handler
-const correlationId = event.requestContext?.requestId || randomUUID();
-logger.setCorrelationId(correlationId);
+Each LLM request is assigned a correlation ID for tracing:
 
-// All subsequent logs will include this correlation ID
-logger.info('Step 1 complete');
-logger.info('Step 2 complete');
+```
+segmentation: seg-{jobId}-{uuid}
+script generation: script-{jobId}-{uuid}
+  └─ per segment: script-{jobId}-{uuid}-seg{index}
+vision analysis: {correlationId}-fig-{figureId}
 ```
 
-## Metrics Collection
+### Log Fields
 
-### Recording Metrics
+Every LLM log entry includes:
+
+- `correlationId`: Unique request identifier
+- `operation`: Type of LLM operation
+- `model`: Model used
+- `provider`: API provider (openai, anthropic, openrouter)
+- `duration`: Response time in milliseconds
+- `tokensUsed`: Total tokens consumed
+- `promptTokens`: Input tokens
+- `completionTokens`: Output tokens
+
+### Error Logging
+
+Failed LLM calls include:
+
+- `errorType`: Categorized error (API_ERROR, JSON_PARSE_ERROR, etc.)
+- `errorMessage`: Human-readable error description
+- `errorStack`: Full stack trace for debugging
+
+## Cost Estimation
+
+The system estimates costs based on current model pricing:
+
+### Model Pricing (per 1M tokens)
+
+| Model | Input | Output |
+|-------|-------|--------|
+| GPT-4 Turbo | $10.00 | $30.00 |
+| GPT-4 Vision | $10.00 | $30.00 |
+| GPT-3.5 Turbo | $0.50 | $1.50 |
+| Claude 3 Opus | $15.00 | $75.00 |
+| Claude 3 Sonnet | $3.00 | $15.00 |
+| Claude 3 Haiku | $0.25 | $1.25 |
+
+### Typical PDF Costs
+
+Based on a 10-page scientific paper:
+
+- **Segmentation**: $0.01-0.05 (1 call)
+- **Script Generation**: $0.05-0.15 (3-5 calls)
+- **Vision Analysis**: $0.01-0.03 per figure
+- **Total**: $0.10-0.30 per PDF
+
+## Usage Examples
+
+### Tracking Job-Level Metrics
 
 ```typescript
-import { metrics } from '../utils/metrics';
+import { JobLLMMetrics } from '../utils/llm-metrics';
 
-// Count metrics
-metrics.recordCount('RequestCount', 1, { endpoint: 'upload' });
-metrics.recordCount('ErrorCount', 1, { endpoint: 'upload', errorType: 'ValidationError' });
-
-// Duration metrics
-metrics.recordDuration('ProcessingTime', 1500, { stage: 'analysis' });
-
-// Size metrics
-metrics.recordSize('FileSize', 1024000, { type: 'pdf' });
-
-// Rate metrics
-metrics.recordRate('ErrorRate', 2.5, { endpoint: 'upload' });
+async function processJob(jobId: string) {
+  const jobMetrics = new JobLLMMetrics(jobId);
+  
+  // Process segments...
+  // Metrics are automatically recorded via recordLLMCallMetrics
+  
+  // Log final summary
+  jobMetrics.logSummary();
+  // Output: {
+  //   jobId: 'job-123',
+  //   totalCalls: 5,
+  //   totalTokens: 12500,
+  //   totalCost: 0.25,
+  //   costFormatted: '$0.2500',
+  //   callsByOperation: {
+  //     segmentation: 1,
+  //     script_generation: 4
+  //   }
+  // }
+}
 ```
 
-### Using Timers
+### Calculating Success Rate
 
 ```typescript
-// Start a timer
-const timerId = metrics.startTimer('AnalysisDuration', { jobId: '123' });
+import { calculateLLMSuccessRate } from '../utils/llm-metrics';
 
-// ... perform operation ...
-
-// Stop timer and record duration
-const duration = metrics.stopTimer(timerId);
+const successRate = calculateLLMSuccessRate(95, 5); // 95%
 ```
 
-### Helper Classes
-
-#### RequestMetrics
-
-Track request counts and error rates:
-```typescript
-import { RequestMetrics } from '../utils/metrics';
-
-const requestMetrics = new RequestMetrics();
-
-requestMetrics.incrementRequest('upload');
-requestMetrics.incrementSuccess('upload');
-requestMetrics.incrementError('upload', 'ValidationError');
-requestMetrics.recordErrorRate('upload');
-```
-
-#### StageMetrics
-
-Track processing stage metrics:
-```typescript
-import { StageMetrics } from '../utils/metrics';
-
-const stageMetrics = new StageMetrics();
-
-stageMetrics.recordStageStart('analysis', jobId);
-// ... process ...
-stageMetrics.recordStageComplete('analysis', jobId, duration);
-// or on error:
-stageMetrics.recordStageFailed('analysis', jobId, 'LLMTimeout');
-```
-
-#### ExternalAPIMetrics
-
-Track external API calls:
-```typescript
-import { ExternalAPIMetrics } from '../utils/metrics';
-
-const apiMetrics = new ExternalAPIMetrics();
-
-apiMetrics.recordAPICall('OpenAI', 'completion');
-apiMetrics.recordAPILatency('OpenAI', 'completion', 1200);
-apiMetrics.recordAPIError('OpenAI', 'completion', 'RateLimitExceeded');
-```
-
-#### StorageMetrics
-
-Track storage operations:
-```typescript
-import { StorageMetrics } from '../utils/metrics';
-
-const storageMetrics = new StorageMetrics();
-
-storageMetrics.recordStorageWrite('S3', fileSize);
-storageMetrics.recordStorageRead('DynamoDB', recordSize);
-storageMetrics.recordStorageUsage('S3', totalBucketSize);
-```
-
-## CloudWatch Integration
-
-### Log Groups
-
-Each Lambda function has a dedicated CloudWatch log group:
-- `/aws/lambda/UploadFunction`
-- `/aws/lambda/AnalyzerFunction`
-- `/aws/lambda/SegmenterFunction`
-- `/aws/lambda/ScriptFunction`
-- `/aws/lambda/AudioFunction`
-- `/aws/lambda/StatusFunction`
-
-Logs are retained for 30 days.
-
-### Metric Filters
-
-Metric filters extract metrics from structured logs:
-- `UploadErrors` - Counts ERROR level logs in upload function
-- `AnalyzerErrors` - Counts ERROR level logs in analyzer function
-- `SegmenterErrors` - Counts ERROR level logs in segmenter function
-- `ScriptErrors` - Counts ERROR level logs in script function
-- `AudioErrors` - Counts ERROR level logs in audio function
-
-### CloudWatch Alarms
-
-Pre-configured alarms:
-
-#### High Error Rate Alarm
-- **Metric**: Lambda Errors
-- **Threshold**: > 5 errors in 5 minutes
-- **Action**: Alert when error rate exceeds threshold
-
-#### Function Timeout Alarms
-- **Upload**: Alert when duration > 55 seconds (90% of 60s timeout)
-- **Analyzer**: Alert when duration > 290 seconds (90% of 300s timeout)
-- **Audio**: Alert when duration > 590 seconds (90% of 600s timeout)
-
-### Publishing Metrics to CloudWatch
-
-Metrics are automatically published to CloudWatch in production:
+### Manual Metric Recording
 
 ```typescript
-import { publishMetric, publishMetrics } from '../utils/cloudwatch';
+import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
-// Publish single metric
-await publishMetric({
-  name: 'CustomMetric',
-  value: 42,
-  unit: 'Count',
-  dimensions: { Environment: 'production' },
+recordLLMCallMetrics({
+  operation: 'custom_operation',
+  model: 'gpt-4-turbo-preview',
+  provider: 'openai',
+  promptTokens: 1000,
+  completionTokens: 500,
+  totalTokens: 1500,
+  durationMs: 2000,
+  success: true,
 });
-
-// Publish multiple metrics
-await publishMetrics([
-  { name: 'Metric1', value: 10, unit: 'Count' },
-  { name: 'Metric2', value: 20, unit: 'Milliseconds' },
-]);
 ```
 
-### Creating Custom Alarms
+## Monitoring in Production
+
+### CloudWatch Integration
+
+In production (`NODE_ENV=production`), metrics are automatically published to CloudWatch:
+
+1. **Metric Namespace**: `PDFLectureService/LLM`
+2. **Dimensions**: operation, model, provider, success
+3. **Retention**: 15 months (CloudWatch default)
+
+### Recommended Alarms
+
+Set up CloudWatch alarms for:
+
+1. **High Error Rate**
+   - Metric: `LLMCallFailure`
+   - Threshold: > 5% of total calls
+   - Action: Alert operations team
+
+2. **High Latency**
+   - Metric: `LLMCallDuration`
+   - Threshold: > 10 seconds (p99)
+   - Action: Investigate API performance
+
+3. **High Cost**
+   - Metric: `JobLLMCostCents`
+   - Threshold: > 50 cents per job
+   - Action: Review token usage optimization
+
+4. **Token Limit Approaching**
+   - Metric: `LLMTotalTokens`
+   - Threshold: > 100k tokens per job
+   - Action: Check for prompt optimization opportunities
+
+## Feature Flags
+
+Control LLM integration rollout with feature flags:
+
+```bash
+# Enable/disable real LLM calls
+ENABLE_REAL_SEGMENTATION=true
+ENABLE_REAL_SCRIPT_GENERATION=true
+ENABLE_IMAGE_EXTRACTION=true
+```
+
+When disabled, the system uses mock implementations that return placeholder data without making API calls.
+
+## Debugging
+
+### Finding Requests by Correlation ID
+
+All logs include correlation IDs. To trace a specific request:
+
+```bash
+# Search CloudWatch Logs
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/pdf-lecture-service \
+  --filter-pattern "seg-job-123-abc"
+```
+
+### Analyzing Token Usage
+
+To identify high token usage:
 
 ```typescript
-import { createAlarm, createStandardAlarmsForFunction } from '../utils/cloudwatch';
-
-// Create a custom alarm
-await createAlarm({
-  alarmName: 'HighLatency',
-  metricName: 'ProcessingTime',
-  threshold: 5000,
-  comparisonOperator: 'GreaterThanThreshold',
-  evaluationPeriods: 2,
-  period: 300,
-  statistic: 'Average',
-  dimensions: { Stage: 'analysis' },
+// Check logs for high token counts
+logger.info('High token usage detected', {
+  correlationId: 'seg-job-123-abc',
+  tokensUsed: 15000,
+  promptLength: 50000,
+  model: 'gpt-4-turbo-preview'
 });
+```
 
-// Create standard alarms for a function
-await createStandardAlarmsForFunction('MyFunction', 60000);
+### Cost Analysis
+
+Review job-level costs:
+
+```bash
+# Query CloudWatch Metrics
+aws cloudwatch get-metric-statistics \
+  --namespace PDFLectureService/LLM \
+  --metric-name JobLLMCostCents \
+  --dimensions Name=jobId,Value=job-123 \
+  --start-time 2024-01-01T00:00:00Z \
+  --end-time 2024-01-02T00:00:00Z \
+  --period 3600 \
+  --statistics Sum
 ```
 
 ## Best Practices
 
-### 1. Always Set Correlation IDs
-
-```typescript
-export async function handler(event: any) {
-  const correlationId = event.requestContext?.requestId || randomUUID();
-  logger.setCorrelationId(correlationId);
-  // ... rest of handler
-}
-```
-
-### 2. Use Timers for Performance Tracking
-
-```typescript
-const timerId = metrics.startTimer('OperationName');
-try {
-  await performOperation();
-} finally {
-  metrics.stopTimer(timerId);
-}
-```
-
-### 3. Track Both Success and Failure
-
-```typescript
-try {
-  await operation();
-  metrics.recordCount('OperationSuccess', 1);
-} catch (error) {
-  metrics.recordCount('OperationFailure', 1, { errorType: error.name });
-  throw error;
-}
-```
-
-### 4. Add Dimensions for Filtering
-
-```typescript
-// Good - allows filtering by endpoint and error type
-metrics.recordCount('ErrorCount', 1, {
-  endpoint: 'upload',
-  errorType: 'ValidationError',
-});
-
-// Less useful - no context
-metrics.recordCount('ErrorCount', 1);
-```
-
-### 5. Log at Appropriate Levels
-
-```typescript
-// ERROR - for failures requiring attention
-logger.error('Failed to process job', { jobId, error });
-
-// WARN - for recoverable issues
-logger.warn('Retry attempt', { attempt: 2 });
-
-// INFO - for normal operations
-logger.info('Job completed', { jobId, duration });
-
-// DEBUG - for detailed debugging (disabled in production)
-logger.debug('Internal state', { state });
-```
-
-## Viewing Logs and Metrics
-
-### CloudWatch Logs Insights
-
-Query logs using CloudWatch Logs Insights:
-
-```sql
-# Find all errors in the last hour
-fields @timestamp, message, metadata.error
-| filter level = "ERROR"
-| sort @timestamp desc
-| limit 100
-
-# Track a specific job by correlation ID
-fields @timestamp, message, function
-| filter correlationId = "abc-123"
-| sort @timestamp asc
-
-# Calculate average processing time
-fields @timestamp, metadata.metric.value as duration
-| filter metadata.metric.name = "StageDuration"
-| stats avg(duration) by metadata.metric.dimensions.stage
-```
-
-### CloudWatch Metrics
-
-View metrics in CloudWatch console:
-- Namespace: `PDFLectureService`
-- Dimensions: `endpoint`, `stage`, `jobId`, `errorType`, etc.
-
-### CloudWatch Dashboards
-
-Create custom dashboards to visualize:
-- Request rates and error rates
-- Processing times per stage
-- External API latency
-- Storage usage trends
-
-## Local Development
-
-In local mode, metrics are logged but not published to CloudWatch:
-
-```bash
-export NODE_ENV=development
-export LOG_LEVEL=DEBUG
-
-# To test CloudWatch integration locally with LocalStack
-export USE_LOCALSTACK=true
-export LOCALSTACK_ENDPOINT=http://localhost:4566
-```
+1. **Always use correlation IDs** for request tracing
+2. **Monitor costs regularly** to avoid surprises
+3. **Set up alarms** for error rates and latency
+4. **Review token usage** to optimize prompts
+5. **Use feature flags** for gradual rollout
+6. **Log errors with full context** for debugging
+7. **Track success rates** by operation and model
 
 ## Troubleshooting
 
-### Logs Not Appearing in CloudWatch
+### High Costs
 
-1. Check IAM permissions for Lambda execution role
-2. Verify log group exists: `/aws/lambda/<FunctionName>`
-3. Check function timeout - logs may not flush if function times out
+If costs are higher than expected:
 
-### Metrics Not Publishing
+1. Check token usage per operation
+2. Review prompt lengths (may be too verbose)
+3. Consider using cheaper models for non-critical operations
+4. Implement caching for repeated requests
 
-1. Verify `NODE_ENV=production` in Lambda environment
-2. Check IAM permissions for `cloudwatch:PutMetricData`
-3. Review CloudWatch API throttling limits
+### High Error Rates
 
-### High CloudWatch Costs
+If error rates increase:
 
-1. Reduce log retention period (default: 30 days)
-2. Lower log level in production (INFO instead of DEBUG)
-3. Sample high-volume metrics instead of recording every occurrence
-4. Use metric filters instead of custom metrics where possible
+1. Check API provider status
+2. Review error types in logs
+3. Verify API keys are valid
+4. Check rate limits
+5. Review retry logic
+
+### Slow Response Times
+
+If response times are slow:
+
+1. Check API provider latency
+2. Review prompt complexity
+3. Consider parallel processing
+4. Check network connectivity
+5. Review timeout settings
+
+## Related Documentation
+
+- [API Implementation Status](./IMPLEMENTATION_STATUS.md)
+- [Deployment Guide](../DEPLOYMENT_GUIDE.md)
+- [User Guide](./USER_GUIDE.md)

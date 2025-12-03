@@ -53,6 +53,11 @@ Local development does not require authentication.
 | `VALIDATION_ERROR` | Invalid input data | 400 | No |
 | `INTERNAL_ERROR` | Unexpected server error | 500 | Yes |
 | `EXTERNAL_SERVICE_ERROR` | LLM or TTS API failure | 502 | Yes |
+| `LLM_SEGMENTATION_FAILED` | Content segmentation LLM call failed after retries | 502 | Yes |
+| `LLM_SCRIPT_GENERATION_FAILED` | Script generation LLM call failed after retries | 502 | Yes |
+| `LLM_VISION_FAILED` | Vision LLM analysis failed for image | 502 | Yes |
+| `LLM_INVALID_RESPONSE` | LLM returned invalid or unparseable response | 502 | Yes |
+| `IMAGE_EXTRACTION_FAILED` | Failed to extract image from PDF | 500 | Yes |
 
 ---
 
@@ -191,15 +196,17 @@ Get the current processing status of a job.
 
 **Job Status Values:**
 
-| Status | Description |
-|--------|-------------|
-| `queued` | Job created, waiting to start |
-| `analyzing` | Extracting content from PDF |
-| `segmenting` | Organizing content into topics |
-| `generating_script` | Creating lecture script |
-| `synthesizing_audio` | Generating audio file |
-| `completed` | All processing finished |
-| `failed` | Processing failed (see error field) |
+| Status | Description | Expected Duration |
+|--------|-------------|-------------------|
+| `queued` | Job created, waiting to start | < 1 second |
+| `analyzing` | Extracting content from PDF | 5-10 seconds |
+| `segmenting` | Organizing content into topics using LLM | 5-10 seconds |
+| `generating_script` | Creating lecture script with agent personality using LLM | 10-20 seconds |
+| `synthesizing_audio` | Generating audio file | 10-20 seconds |
+| `completed` | All processing finished | - |
+| `failed` | Processing failed (see error field) | - |
+
+**Note:** Total processing time is typically 30-60 seconds per PDF, with LLM operations (segmentation and script generation) accounting for 15-30 seconds of that time.
 
 **Error Response (404):**
 ```json
@@ -561,6 +568,130 @@ Retrieve playback data for the immersive reader (used by frontend).
 
 ---
 
+## LLM Processing Behavior
+
+The PDF Lecture Service uses Large Language Models (LLMs) for three critical processing stages:
+
+### 1. Content Segmentation
+
+**Purpose:** Analyzes extracted PDF content and organizes it into logical topic segments.
+
+**LLM Provider:** OpenRouter, OpenAI, or Anthropic (configurable)  
+**Model Used:** GPT-4 or Claude 3 (automatically selected based on provider)  
+**Temperature:** 0.7 (balanced between consistency and creativity)
+
+**Processing Details:**
+- Analyzes page summaries, figures, tables, formulas, and citations
+- Identifies distinct topics and prerequisite relationships
+- Creates logical narrative flow for lecture structure
+- Returns structured JSON with segment definitions
+
+**Expected Response Time:** 5-10 seconds per PDF  
+**API Cost:** $0.01-0.05 per PDF (varies by content length)
+
+**Behavior:**
+- Different PDFs produce different segment structures based on actual content
+- Segments include references to specific pages, figures, tables, and formulas
+- Prerequisites are automatically detected to ensure logical learning progression
+
+### 2. Script Generation
+
+**Purpose:** Creates lecture scripts based on segmented content and agent personality.
+
+**LLM Provider:** OpenRouter, OpenAI, or Anthropic (configurable)  
+**Model Used:** GPT-4 or Claude 3 (automatically selected based on provider)  
+**Temperature:** 0.8 (higher for more creative, personality-driven output)
+
+**Processing Details:**
+- Incorporates agent personality instructions and tone
+- References actual figures, tables, and formulas from the PDF
+- Adapts language style based on agent personality (humorous, serious, casual, etc.)
+- Generates natural, conversational lecture scripts
+
+**Expected Response Time:** 10-20 seconds per PDF (multiple LLM calls, one per segment)  
+**API Cost:** $0.05-0.15 per PDF (varies by segment count, typically 3-5 segments)
+
+**Behavior:**
+- Different agents produce measurably different script styles
+- Humorous agents include jokes, analogies, and lighthearted commentary
+- Serious agents maintain formal academic language and precise terminology
+- Scripts reference actual content from the PDF (not generic placeholders)
+
+### 3. Image Extraction & Vision Analysis
+
+**Purpose:** Extracts actual images from PDFs and generates meaningful descriptions using vision LLMs.
+
+**LLM Provider:** OpenRouter, OpenAI, or Anthropic (configurable)  
+**Model Used:** GPT-4 Vision or Claude 3 Vision  
+**Image Processing:** Extracts images at high resolution (up to 2000x2000), optimizes for API efficiency
+
+**Processing Details:**
+- Extracts actual image data from PDF pages
+- Converts images to base64 format for vision API
+- Resizes large images to optimize API costs while maintaining quality
+- Generates detailed descriptions of figures, diagrams, and charts
+
+**Expected Response Time:** 2-5 seconds per figure  
+**API Cost:** $0.01-0.03 per figure (varies by image size and complexity)
+
+**Behavior:**
+- Vision LLM analyzes actual extracted images (not placeholders)
+- Descriptions include specific details visible in the image
+- Continues processing other figures if one extraction fails
+
+### Total Processing Impact
+
+**Per PDF Processing Time:**
+- Base processing (without LLM): ~10-20 seconds
+- With LLM integrations: +20-40 seconds additional
+- **Total expected time:** 30-60 seconds per PDF
+
+**Per PDF API Costs:**
+- Content Segmentation: $0.01-0.05
+- Script Generation: $0.05-0.15
+- Image Extraction & Vision: $0.01-0.03 per figure (typically 2-5 figures)
+- **Total expected cost:** $0.10-0.30 per PDF
+
+**Cost Optimization:**
+- Images are resized to reduce token usage
+- Prompts are optimized for conciseness
+- Caching is used for identical inputs (future enhancement)
+
+### Error Handling
+
+All LLM API calls include comprehensive error handling:
+
+**Retry Logic:**
+- Automatic retry with exponential backoff (up to 3 attempts)
+- Initial delay: 1 second
+- Max delay: 10 seconds
+- Backoff multiplier: 2x
+
+**Error Categories:**
+- **Network Errors:** Automatically retried
+- **API Errors (rate limit, auth):** Logged and fail fast
+- **Parsing Errors:** Invalid JSON responses are caught and logged
+- **Validation Errors:** Invalid response structures are rejected
+
+**Fallback Behavior:**
+- Segmentation failure: Creates single segment with all content
+- Script generation failure: Creates basic descriptive script
+- Image extraction failure: Skips that figure and continues with others
+
+### Monitoring
+
+LLM processing is monitored with detailed metrics:
+
+- API success rate per provider
+- Response times per operation type
+- Token usage per PDF
+- Cost per PDF
+- Error rates and types
+
+See [MONITORING.md](./MONITORING.md) for CloudWatch dashboard configuration.
+
+---
+
 ## Pipeline Processing Endpoints
 
 These endpoints manually trigger pipeline stages (primarily for testing).
@@ -571,12 +702,39 @@ These endpoints manually trigger pipeline stages (primarily for testing).
 
 Manually trigger content analysis for a job.
 
+**Processing Details:**
+- Extracts text, figures, tables, and formulas from PDF
+- Extracts actual images from PDF pages for vision LLM analysis
+- Uses vision LLM to generate descriptions of figures
+- Expected processing time: 5-10 seconds + 2-5 seconds per figure
+- API cost: $0.01-0.03 per figure
+
 **Success Response (200):**
 ```json
 {
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
   "status": "segmenting",
-  "message": "Content analysis completed"
+  "message": "Content analysis completed",
+  "analyzedContent": {
+    "pages": 12,
+    "figures": 5,
+    "tables": 3,
+    "formulas": 8
+  }
+}
+```
+
+**Error Response (502):**
+```json
+{
+  "error": "Failed to analyze figure: Vision LLM API call failed",
+  "code": "LLM_VISION_FAILED",
+  "retryable": true,
+  "details": {
+    "figureId": "fig-1",
+    "pageNumber": 3,
+    "attempts": 3
+  }
 }
 ```
 
@@ -588,6 +746,11 @@ Manually trigger content analysis for a job.
 
 Manually trigger content segmentation for a job.
 
+**Processing Details:**
+- Uses LLM to analyze extracted content and create logical topic segments
+- Expected processing time: 5-10 seconds
+- API cost: $0.01-0.05 per request
+
 **Success Response (200):**
 ```json
 {
@@ -596,6 +759,20 @@ Manually trigger content segmentation for a job.
   "message": "Content segmentation completed",
   "segmentedContent": {
     "segments": 5
+  }
+}
+```
+
+**Error Response (502):**
+```json
+{
+  "error": "Failed to segment content: LLM API call failed after 3 retries",
+  "code": "LLM_SEGMENTATION_FAILED",
+  "retryable": true,
+  "details": {
+    "provider": "openrouter",
+    "model": "gpt-4",
+    "attempts": 3
   }
 }
 ```
@@ -615,6 +792,13 @@ Manually trigger script generation for a job.
 }
 ```
 
+**Processing Details:**
+- Uses LLM with agent personality to create lecture scripts
+- Expected processing time: 10-20 seconds (one LLM call per segment)
+- API cost: $0.05-0.15 per request (varies by segment count)
+- Scripts reflect agent personality (humorous, serious, etc.)
+- Scripts reference actual PDF content (figures, tables, formulas)
+
 **Success Response (200):**
 ```json
 {
@@ -624,6 +808,22 @@ Manually trigger script generation for a job.
   "lectureScript": {
     "segments": 5,
     "totalEstimatedDuration": 450.0
+  }
+}
+```
+
+**Error Response (502):**
+```json
+{
+  "error": "Failed to generate script: LLM API call failed after 3 retries",
+  "code": "LLM_SCRIPT_GENERATION_FAILED",
+  "retryable": true,
+  "details": {
+    "provider": "openrouter",
+    "model": "gpt-4",
+    "agentId": "agent-123",
+    "segmentIndex": 2,
+    "attempts": 3
   }
 }
 ```

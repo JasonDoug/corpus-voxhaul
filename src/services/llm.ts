@@ -9,6 +9,7 @@
 
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
+import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -58,46 +59,81 @@ class OpenRouterClient {
   
   async chat(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model || 'openai/gpt-4-turbo-preview';
+    const startTime = Date.now();
     
     logger.info('OpenRouter chat request', {
       model,
       messageCount: request.messages.length,
     });
     
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/pdf-lecture-service',
-        'X-Title': this.appName,
-      },
-      body: JSON.stringify({
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://github.com/pdf-lecture-service',
+          'X-Title': this.appName,
+        },
+        body: JSON.stringify({
+          model,
+          messages: request.messages,
+          temperature: request.temperature ?? 0.7,
+          max_tokens: request.maxTokens ?? 4096,
+          stream: request.stream ?? false,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('OpenRouter API error', { status: response.status, error });
+        throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+      }
+      
+      const data: any = await response.json();
+      const duration = Date.now() - startTime;
+      
+      const result = {
+        content: data.choices[0].message.content,
+        model: data.model,
+        usage: {
+          promptTokens: data.usage?.prompt_tokens || 0,
+          completionTokens: data.usage?.completion_tokens || 0,
+          totalTokens: data.usage?.total_tokens || 0,
+        },
+      };
+      
+      // Record metrics for successful call
+      recordLLMCallMetrics({
+        operation: 'chat',
+        model: data.model,
+        provider: 'openrouter',
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        durationMs: duration,
+        success: true,
+      });
+      
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Record metrics for failed call
+      recordLLMCallMetrics({
+        operation: 'chat',
         model,
-        messages: request.messages,
-        temperature: request.temperature ?? 0.7,
-        max_tokens: request.maxTokens ?? 4096,
-        stream: request.stream ?? false,
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('OpenRouter API error', { status: response.status, error });
-      throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+        provider: 'openrouter',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: duration,
+        success: false,
+        errorType: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      throw error;
     }
-    
-    const data: any = await response.json();
-    
-    return {
-      content: data.choices[0].message.content,
-      model: data.model,
-      usage: {
-        promptTokens: data.usage?.prompt_tokens || 0,
-        completionTokens: data.usage?.completion_tokens || 0,
-        totalTokens: data.usage?.total_tokens || 0,
-      },
-    };
   }
   
   async vision(request: VisionRequest): Promise<string> {
@@ -160,43 +196,78 @@ class OpenAIClient {
   
   async chat(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model || 'gpt-4-turbo-preview';
+    const startTime = Date.now();
     
     logger.info('OpenAI chat request', {
       model,
       messageCount: request.messages.length,
     });
     
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: request.messages,
+          temperature: request.temperature ?? 0.7,
+          max_tokens: request.maxTokens ?? 4096,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('OpenAI API error', { status: response.status, error });
+        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+      }
+      
+      const data: any = await response.json();
+      const duration = Date.now() - startTime;
+      
+      const result = {
+        content: data.choices[0].message.content,
+        model: data.model,
+        usage: {
+          promptTokens: data.usage.prompt_tokens,
+          completionTokens: data.usage.completion_tokens,
+          totalTokens: data.usage.total_tokens,
+        },
+      };
+      
+      // Record metrics for successful call
+      recordLLMCallMetrics({
+        operation: 'chat',
+        model: data.model,
+        provider: 'openai',
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        durationMs: duration,
+        success: true,
+      });
+      
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Record metrics for failed call
+      recordLLMCallMetrics({
+        operation: 'chat',
         model,
-        messages: request.messages,
-        temperature: request.temperature ?? 0.7,
-        max_tokens: request.maxTokens ?? 4096,
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('OpenAI API error', { status: response.status, error });
-      throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+        provider: 'openai',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: duration,
+        success: false,
+        errorType: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      throw error;
     }
-    
-    const data: any = await response.json();
-    
-    return {
-      content: data.choices[0].message.content,
-      model: data.model,
-      usage: {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
-      },
-    };
   }
   
   async vision(request: VisionRequest): Promise<string> {
@@ -257,54 +328,89 @@ class AnthropicClient {
   
   async chat(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model || 'claude-3-opus-20240229';
+    const startTime = Date.now();
     
     logger.info('Anthropic chat request', {
       model,
       messageCount: request.messages.length,
     });
     
-    // Convert messages format for Anthropic
-    const systemMessage = request.messages.find(m => m.role === 'system');
-    const messages = request.messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
-      }));
-    
-    const response = await fetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    try {
+      // Convert messages format for Anthropic
+      const systemMessage = request.messages.find(m => m.role === 'system');
+      const messages = request.messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content,
+        }));
+      
+      const response = await fetch(`${this.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          system: systemMessage?.content,
+          temperature: request.temperature ?? 0.7,
+          max_tokens: request.maxTokens ?? 4096,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('Anthropic API error', { status: response.status, error });
+        throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+      }
+      
+      const data: any = await response.json();
+      const duration = Date.now() - startTime;
+      
+      const result = {
+        content: data.content[0].text,
+        model: data.model,
+        usage: {
+          promptTokens: data.usage.input_tokens,
+          completionTokens: data.usage.output_tokens,
+          totalTokens: data.usage.input_tokens + data.usage.output_tokens,
+        },
+      };
+      
+      // Record metrics for successful call
+      recordLLMCallMetrics({
+        operation: 'chat',
+        model: data.model,
+        provider: 'anthropic',
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        durationMs: duration,
+        success: true,
+      });
+      
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Record metrics for failed call
+      recordLLMCallMetrics({
+        operation: 'chat',
         model,
-        messages,
-        system: systemMessage?.content,
-        temperature: request.temperature ?? 0.7,
-        max_tokens: request.maxTokens ?? 4096,
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('Anthropic API error', { status: response.status, error });
-      throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+        provider: 'anthropic',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: duration,
+        success: false,
+        errorType: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      throw error;
     }
-    
-    const data: any = await response.json();
-    
-    return {
-      content: data.content[0].text,
-      model: data.model,
-      usage: {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.input_tokens + data.usage.output_tokens,
-      },
-    };
   }
   
   async vision(request: VisionRequest): Promise<string> {
