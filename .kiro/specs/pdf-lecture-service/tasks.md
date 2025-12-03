@@ -594,7 +594,7 @@ ty 8: Formula explanation**
     - Verify appropriate error messages for each case
     - Verify system doesn't crash or hang
     - _Requirements: 1.2, 1.3_
-  - [ ] 20.5 Test playback synchronization accuracy
+  - [x] 20.5 Test playback synchronization accuracy
     - Load completed lecture in playback interface
     - Play audio from beginning
     - Verify highlighting updates smoothly throughout
