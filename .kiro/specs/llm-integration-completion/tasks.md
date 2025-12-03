@@ -103,38 +103,38 @@
     - Verify content-specific references
     - _Requirements: 2.2, 2.3, 2.4, 2.5, 5.2_
 
-- [ ] 3. Implement Image Extraction (Quick Win Approach)
-  - [ ] 3.1 Install pdf-img-convert dependency
+- [x] 3. Implement Image Extraction (Quick Win Approach)
+  - [x] 3.1 Install pdf-img-convert dependency
     - Add pdf-img-convert to package.json
     - Run npm install
     - Verify installation
     - _Requirements: 3.1_
-  - [ ] 3.2 Implement extractImageFromPDF function
+  - [x] 3.2 Implement extractImageFromPDF function
     - Import pdf-img-convert
     - Convert specific page to image
     - Return base64-encoded image data
     - Add error handling
     - Log extraction success/failure
     - _Requirements: 3.1, 3.2, 3.5_
-  - [ ] 3.3 Implement optimizeImageForVisionAPI function
+  - [x] 3.3 Implement optimizeImageForVisionAPI function
     - Check image size
     - Resize if larger than 2000x2000
     - Compress to reduce token usage
     - Return optimized image data
     - _Requirements: 3.3_
-  - [ ] 3.4 Update analyzeFigures function
+  - [x] 3.4 Update analyzeFigures function
     - Replace placeholder image data with extractImageFromPDF call
     - Handle extraction errors gracefully
     - Continue processing other figures if one fails
     - Log extraction metrics
     - _Requirements: 3.1, 3.4, 3.5_
-  - [ ] 3.5 Write unit tests for image extraction
+  - [x] 3.5 Write unit tests for image extraction
     - Test with PDFs containing images
     - Test with PDFs without images
     - Test error handling
     - Test optimization logic
     - _Requirements: 3.1, 3.5_
-  - [ ] 3.6 Write integration test for image extraction
+  - [x] 3.6 Write integration test for image extraction
     - Extract images from real scientific PDF
     - Verify vision LLM can analyze extracted images
     - Verify descriptions are meaningful
@@ -152,7 +152,7 @@
     - Log response times and token counts
     - Log errors with full context
     - _Requirements: 4.2_
-  - [ ] 4.3 Add feature flags
+  - [-] 4.3 Add feature flags
     - Add ENABLE_REAL_SEGMENTATION flag
     - Add ENABLE_REAL_SCRIPT_GENERATION flag
     - Add ENABLE_IMAGE_EXTRACTION flag

@@ -40,4 +40,10 @@ export const config = {
     analysisTimeoutMs: parseInt(process.env.ANALYSIS_TIMEOUT_MS || '300000', 10),
     audioSynthesisTimeoutMs: parseInt(process.env.AUDIO_SYNTHESIS_TIMEOUT_MS || '600000', 10),
   },
+  
+  featureFlags: {
+    enableRealSegmentation: process.env.ENABLE_REAL_SEGMENTATION === 'true',
+    enableRealScriptGeneration: process.env.ENABLE_REAL_SCRIPT_GENERATION === 'true',
+    enableImageExtraction: process.env.ENABLE_IMAGE_EXTRACTION === 'true',
+  },
 };

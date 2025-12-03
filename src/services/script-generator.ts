@@ -1,5 +1,6 @@
 // Script Generator service - Create lecture scripts with personality
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 import { LectureAgent } from '../models/agent';
 import { ContentSegment, Figure, Table, Formula } from '../models/content';
 import { LectureScript, ScriptSegment, ScriptBlock } from '../models/script';
@@ -562,9 +563,38 @@ ENTHUSIASTIC GUIDELINES:
 }
 
 /**
+ * Mock implementation for script generation (used when feature flag is disabled)
+ */
+async function mockScriptGenerationLLM(_prompt: string, agent: LectureAgent): Promise<string> {
+  logger.info('Using mock script generation (feature flag disabled)', { agentId: agent.id });
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Return a simple mock script with personality hint
+  const toneHint = agent.personality.tone === 'humorous' ? 'with a touch of humor' : 
+                   agent.personality.tone === 'serious' ? 'in a formal academic style' : 
+                   'in a conversational manner';
+  
+  return `Welcome to this segment of our lecture, presented ${toneHint}. 
+  
+In this section, we'll explore the key concepts and findings from the research. The content has been carefully organized to help you understand the material in a logical progression.
+
+We'll examine the data, discuss the methodology, and consider the implications of these findings for the field. Throughout this presentation, I'll be referencing various figures, tables, and formulas that illustrate these important points.
+
+Let's dive into the details and see what we can learn from this fascinating research.`;
+}
+
+/**
  * Call LLM API to generate script for a segment
  */
 async function callScriptGenerationLLM(prompt: string, agent: LectureAgent): Promise<string> {
+  // Check feature flag
+  if (!config.featureFlags.enableRealScriptGeneration) {
+    logger.info('Real script generation disabled by feature flag, using mock implementation');
+    return mockScriptGenerationLLM(prompt, agent);
+  }
+  
   try {
     const model = getRecommendedModel('script', llmService.getProvider());
     

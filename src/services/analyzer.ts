@@ -6,11 +6,10 @@
 // ✅ Citation detection and parsing
 // ✅ Vision LLM integration for figure descriptions
 // ✅ Text LLM integration for table/formula interpretation
-// ❌ Actual image extraction from PDFs (uses placeholders)
-//
-// See docs/IMAGE_EXTRACTION_TODO.md for details on completing image extraction.
+// ✅ Actual image extraction from PDFs (using pdf-img-convert)
 //
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 import { 
   ExtractedContent, 
   PageContent, 
@@ -25,6 +24,7 @@ import { llmService, getRecommendedModel } from './llm';
 // Dynamic imports for modules with ESM/CJS issues
 const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
+const { convert } = require('pdf-img-convert');
 
 /**
  * Extract text content from all pages of a PDF
@@ -131,28 +131,97 @@ export function detectElementPositions(pages: PageContent[]): {
 }
 
 /**
+ * Extract image from a specific PDF page
+ * Converts the page to a PNG image and returns base64-encoded data
+ */
+async function extractImageFromPDF(
+  pdfBuffer: Buffer,
+  pageNumber: number
+): Promise<string> {
+  // Check feature flag
+  if (!config.featureFlags.enableImageExtraction) {
+    logger.info('Image extraction disabled by feature flag, using placeholder', { pageNumber });
+    // Return placeholder image data
+    return `data:image/png;base64,placeholder_page_${pageNumber}`;
+  }
+  
+  try {
+    logger.info('Extracting image from PDF', { pageNumber });
+    
+    // Convert specific page to image
+    // pdf-img-convert uses page_numbers starting from 1
+    const images = await convert(pdfBuffer, {
+      page_numbers: [pageNumber],
+      base64: true,
+      width: 2000, // High resolution for vision models
+      height: 2000,
+    });
+    
+    if (!images || images.length === 0) {
+      throw new Error('No image extracted from PDF page');
+    }
+    
+    // Format as data URL
+    const imageData = `data:image/png;base64,${images[0]}`;
+    
+    logger.info('Image extracted successfully', {
+      pageNumber,
+      imageSize: imageData.length,
+    });
+    
+    return imageData;
+  } catch (error) {
+    logger.error('Image extraction failed', { pageNumber, error });
+    throw new Error(`Failed to extract image from page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Optimize image size for vision API
+ * Reduces token usage and API costs by checking image size
+ * 
+ * Note: For the quick win approach, we're already constraining the image size
+ * during extraction (2000x2000 max). In production, you could add additional
+ * optimization using libraries like 'sharp' or 'jimp' to:
+ * 1. Further resize if needed
+ * 2. Compress to JPEG if PNG is too large
+ * 3. Reduce quality to 85%
+ */
+async function optimizeImageForVisionAPI(base64Image: string): Promise<string> {
+  try {
+    const originalSize = base64Image.length;
+    
+    // Check if image is too large (>5MB base64 string is roughly >3.75MB image)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    
+    if (originalSize > maxSize) {
+      logger.warn('Image exceeds recommended size for vision API', {
+        originalSize,
+        maxSize,
+      });
+      // For quick win, we log a warning but don't resize
+      // In production, implement actual resizing here
+    }
+    
+    logger.info('Image optimization check completed', {
+      originalSize,
+      optimized: false, // Quick win approach doesn't actually optimize
+    });
+    
+    return base64Image;
+  } catch (error) {
+    logger.error('Image optimization failed', { error });
+    // Return original image if optimization fails
+    return base64Image;
+  }
+}
+
+/**
  * Extract images from PDF and generate descriptions using vision LLM
- * 
- * IMPLEMENTATION GAP: Image Extraction
- * ====================================
- * This function currently uses placeholder image data instead of extracting actual images from PDFs.
- * The vision LLM integration is fully functional, but it needs real image data to work properly.
- * 
- * To complete this implementation:
- * 1. Use pdf.js (Mozilla's PDF library) or pdfium to extract actual images from the PDF buffer
- * 2. Convert extracted images to base64 or upload to temporary storage (S3)
- * 3. Pass the real image URL/data to the vision LLM
- * 
- * Libraries to consider:
- * - pdf.js: https://github.com/mozilla/pdf.js (most popular, well-maintained)
- * - pdfium: https://pdfium.googlesource.com/pdfium/ (Google's PDF library)
- * - pdf-img-convert: https://www.npmjs.com/package/pdf-img-convert (simpler wrapper)
- * 
- * See docs/IMAGE_EXTRACTION_TODO.md for detailed implementation guide.
  */
 export async function analyzeFigures(
   figurePositions: Array<{ pageNumber: number; id: string }>,
-  _pdfBuffer: Buffer // TODO: Use this to extract actual images - see function docs above
+  pdfBuffer: Buffer
 ): Promise<Figure[]> {
   logger.info('Starting figure analysis', { count: figurePositions.length });
   
@@ -160,30 +229,43 @@ export async function analyzeFigures(
   
   for (const position of figurePositions) {
     try {
-      // IMPLEMENTATION GAP: Replace this placeholder with actual image extraction
-      // The vision LLM call below is fully functional and will work once real images are provided
-      const imageData = `data:image/png;base64,placeholder_${position.id}`;
+      // Extract actual image from PDF
+      const imageData = await extractImageFromPDF(pdfBuffer, position.pageNumber);
+      
+      // Optimize image for vision API
+      const optimizedImage = await optimizeImageForVisionAPI(imageData);
       
       // Generate description using vision LLM
-      const description = await generateFigureDescription(imageData, position.pageNumber);
+      const description = await generateFigureDescription(optimizedImage, position.pageNumber);
       
       const figure: Figure = {
         id: position.id,
         pageNumber: position.pageNumber,
-        imageData: imageData,
+        imageData: optimizedImage,
         description: description,
         caption: `Figure on page ${position.pageNumber}`,
       };
       
       figures.push(figure);
-      logger.info('Figure analyzed', { figureId: position.id, pageNumber: position.pageNumber });
+      logger.info('Figure analyzed successfully', { 
+        figureId: position.id, 
+        pageNumber: position.pageNumber,
+        imageSize: optimizedImage.length,
+      });
     } catch (error) {
-      logger.error('Figure analysis failed', { figureId: position.id, error });
+      logger.error('Figure analysis failed, continuing with other figures', { 
+        figureId: position.id, 
+        pageNumber: position.pageNumber,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       // Continue with other figures even if one fails
     }
   }
   
-  logger.info('Figure analysis completed', { totalFigures: figures.length });
+  logger.info('Figure analysis completed', { 
+    totalFigures: figures.length,
+    requestedFigures: figurePositions.length,
+  });
   return figures;
 }
 

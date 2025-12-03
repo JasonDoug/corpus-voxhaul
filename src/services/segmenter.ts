@@ -1,5 +1,6 @@
 // Content Segmenter service - Organize extracted content into logical topic segments
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 import { ExtractedContent, SegmentedContent, ContentSegment, ContentBlock } from '../models/content';
 import { llmService, getRecommendedModel } from './llm';
 
@@ -466,11 +467,66 @@ export function parseSegmentationResponse(
 }
 
 /**
+ * Mock implementation for segmentation (used when feature flag is disabled)
+ */
+async function mockSegmentationLLM(_prompt: string): Promise<LLMSegmentationResponse> {
+  logger.info('Using mock segmentation (feature flag disabled)');
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Return a simple mock segmentation
+  return {
+    segments: [
+      {
+        title: 'Introduction and Background',
+        contentIndices: {
+          pageRanges: [[1, 2]],
+          figureIds: [],
+          tableIds: [],
+          formulaIds: [],
+          citationIds: [],
+        },
+        prerequisites: [],
+      },
+      {
+        title: 'Main Content',
+        contentIndices: {
+          pageRanges: [[3, 5]],
+          figureIds: [],
+          tableIds: [],
+          formulaIds: [],
+          citationIds: [],
+        },
+        prerequisites: [0],
+      },
+      {
+        title: 'Conclusion',
+        contentIndices: {
+          pageRanges: [[6, 6]],
+          figureIds: [],
+          tableIds: [],
+          formulaIds: [],
+          citationIds: [],
+        },
+        prerequisites: [1],
+      },
+    ],
+  };
+}
+
+/**
  * Call LLM API to segment content
  * Uses the existing LLM service to analyze content and create logical segments
  * Exported for testing purposes
  */
 export async function callSegmentationLLM(prompt: string): Promise<LLMSegmentationResponse> {
+  // Check feature flag
+  if (!config.featureFlags.enableRealSegmentation) {
+    logger.info('Real segmentation disabled by feature flag, using mock implementation');
+    return mockSegmentationLLM(prompt);
+  }
+  
   const startTime = Date.now();
   let model: string | undefined;
   

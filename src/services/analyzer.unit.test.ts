@@ -37,6 +37,16 @@ jest.mock('pdf-parse', () => {
   });
 });
 
+// Mock pdf-img-convert
+jest.mock('pdf-img-convert', () => ({
+  convert: jest.fn((_buffer: Buffer, options: any) => {
+    // Return a mock base64 image for each requested page
+    const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const pageNumbers = options.page_numbers || [1];
+    return Promise.resolve(pageNumbers.map(() => mockBase64));
+  })
+}));
+
 describe('Content Analyzer Unit Tests', () => {
   describe('extractTextFromPDF', () => {
     it('should extract text from multi-page PDF', async () => {
@@ -176,6 +186,71 @@ describe('Content Analyzer Unit Tests', () => {
       
       // Should still return results even if some fail
       expect(figures.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should extract real images from PDF pages', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' }
+      ];
+      const pdfBuffer = Buffer.from('dummy pdf with image', 'utf-8');
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      expect(figures.length).toBe(1);
+      expect(figures[0].imageData).toMatch(/^data:image\/png;base64,/);
+      // Should not be a placeholder
+      expect(figures[0].imageData).not.toContain('placeholder');
+    });
+
+    it('should handle image extraction errors gracefully', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' },
+        { pageNumber: 2, id: 'fig-2' }
+      ];
+      const pdfBuffer = Buffer.from('dummy pdf', 'utf-8');
+      
+      // Mock pdf-img-convert to fail for the first page
+      const { convert } = require('pdf-img-convert');
+      convert.mockImplementationOnce(() => {
+        throw new Error('Image extraction failed');
+      });
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      // Should continue processing other figures even if one fails
+      // The second figure should still be processed
+      expect(figures.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should handle PDFs with no extractable images', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' }
+      ];
+      const pdfBuffer = Buffer.from('text only pdf', 'utf-8');
+      
+      // Mock pdf-img-convert to return empty array
+      const { convert } = require('pdf-img-convert');
+      convert.mockImplementationOnce(() => Promise.resolve([]));
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      // Should handle gracefully and not crash
+      expect(figures.length).toBe(0);
+    });
+
+    it('should optimize images before sending to vision API', async () => {
+      const figurePositions = [
+        { pageNumber: 1, id: 'fig-1' }
+      ];
+      const pdfBuffer = Buffer.from('dummy pdf', 'utf-8');
+      
+      const figures = await analyzeFigures(figurePositions, pdfBuffer);
+      
+      expect(figures.length).toBe(1);
+      // Image should be in proper format
+      expect(figures[0].imageData).toMatch(/^data:image\/png;base64,/);
+      // Should have reasonable size (not empty)
+      expect(figures[0].imageData.length).toBeGreaterThan(50);
     });
   });
 

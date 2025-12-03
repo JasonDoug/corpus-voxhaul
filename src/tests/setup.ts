@@ -11,6 +11,11 @@ process.env.OPENROUTER_API_KEY = 'test-key-mock';
 process.env.OPENAI_API_KEY = 'test-key-mock';
 process.env.ANTHROPIC_API_KEY = 'test-key-mock';
 
+// Enable feature flags by default in tests
+process.env.ENABLE_REAL_SEGMENTATION = 'true';
+process.env.ENABLE_REAL_SCRIPT_GENERATION = 'true';
+process.env.ENABLE_IMAGE_EXTRACTION = 'true';
+
 // Mock console methods to reduce noise in test output
 global.console = {
   ...console,

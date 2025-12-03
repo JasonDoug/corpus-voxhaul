@@ -25,4 +25,11 @@ describe('Configuration', () => {
     expect(config.processing.analysisTimeoutMs).toBeGreaterThan(0);
     expect(config.processing.audioSynthesisTimeoutMs).toBeGreaterThan(0);
   });
+
+  it('should have feature flags configuration', () => {
+    expect(config.featureFlags).toBeDefined();
+    expect(typeof config.featureFlags.enableRealSegmentation).toBe('boolean');
+    expect(typeof config.featureFlags.enableRealScriptGeneration).toBe('boolean');
+    expect(typeof config.featureFlags.enableImageExtraction).toBe('boolean');
+  });
 });
