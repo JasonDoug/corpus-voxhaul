@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { LectureAgent } from '../models/agent';
 import { ContentSegment, Figure, Table, Formula } from '../models/content';
 import { LectureScript, ScriptSegment, ScriptBlock } from '../models/script';
+import { llmService, getRecommendedModel } from './llm';
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -120,7 +121,36 @@ export function createSegmentPrompt(
   segmentPrompt += `SEGMENT ${segmentIndex + 1} of ${totalSegments}: ${segment.title}\n`;
   segmentPrompt += `${'='.repeat(80)}\n\n`;
   
+  // Add context about segment position
+  if (segmentIndex === 0) {
+    segmentPrompt += `CONTEXT: This is the FIRST segment. Introduce the topic and set the stage for the lecture.\n\n`;
+  } else if (segmentIndex === totalSegments - 1) {
+    segmentPrompt += `CONTEXT: This is the FINAL segment. Wrap up the lecture and provide concluding thoughts.\n\n`;
+  } else {
+    segmentPrompt += `CONTEXT: This is segment ${segmentIndex + 1} of ${totalSegments}. Build on previous concepts and prepare for what's next.\n\n`;
+  }
+  
   segmentPrompt += `Create an engaging lecture script for this segment. The script should be suitable for audio narration.\n\n`;
+  
+  // Count visual elements for summary
+  let figureCount = 0;
+  let tableCount = 0;
+  let formulaCount = 0;
+  
+  segment.contentBlocks.forEach(block => {
+    if (block.type === 'figure') figureCount++;
+    if (block.type === 'table') tableCount++;
+    if (block.type === 'formula') formulaCount++;
+  });
+  
+  // Add visual element summary
+  if (figureCount > 0 || tableCount > 0 || formulaCount > 0) {
+    segmentPrompt += `VISUAL ELEMENTS IN THIS SEGMENT:\n`;
+    if (figureCount > 0) segmentPrompt += `- ${figureCount} figure(s)\n`;
+    if (tableCount > 0) segmentPrompt += `- ${tableCount} table(s)\n`;
+    if (formulaCount > 0) segmentPrompt += `- ${formulaCount} formula(s)\n`;
+    segmentPrompt += `\n`;
+  }
   
   // Add content blocks
   segmentPrompt += `CONTENT TO COVER:\n\n`;
@@ -164,13 +194,19 @@ export function createSegmentPrompt(
     }
   });
   
-  segmentPrompt += `\nINSTRUCTIONS:\n`;
+  // Add length guidance
+  const estimatedMinutes = Math.max(2, Math.min(5, segment.contentBlocks.length));
+  segmentPrompt += `\nLENGTH GUIDANCE:\n`;
+  segmentPrompt += `Target: ${estimatedMinutes}-${estimatedMinutes + 1} minutes of speaking time (approximately ${estimatedMinutes * 150}-${(estimatedMinutes + 1) * 150} words)\n\n`;
+  
+  segmentPrompt += `INSTRUCTIONS:\n`;
   segmentPrompt += `1. Write a complete lecture script for this segment\n`;
   segmentPrompt += `2. Integrate all content blocks into a cohesive narrative\n`;
   segmentPrompt += `3. Provide verbal descriptions for all visual elements\n`;
   segmentPrompt += `4. Maintain your personality and tone throughout\n`;
   segmentPrompt += `5. Write in a natural speaking style suitable for audio\n`;
-  segmentPrompt += `6. The script should flow smoothly when read aloud\n\n`;
+  segmentPrompt += `6. The script should flow smoothly when read aloud\n`;
+  segmentPrompt += `7. Reference specific figures, tables, and formulas by describing what they show\n\n`;
   
   segmentPrompt += `Respond with ONLY the lecture script text, no additional formatting or metadata.\n`;
   
@@ -462,35 +498,106 @@ export function calculateTotalDuration(segments: ScriptSegment[]): number {
 }
 
 /**
- * Call LLM API to generate script for a segment
- * This is a placeholder - real implementation would call actual LLM API
+ * Build system prompt incorporating agent personality
  */
-async function callScriptGenerationLLM(_prompt: string): Promise<string> {
-  // Placeholder implementation
-  // In production, this would:
-  // 1. Call LLM API (e.g., OpenAI GPT-4, Anthropic Claude)
-  // 2. Return the generated script text
+function buildScriptSystemPrompt(agent: LectureAgent): string {
+  const basePrompt = `You are a lecture script writer creating engaging educational content.
+
+AGENT PERSONALITY:
+${agent.personality.instructions}
+
+TONE: ${agent.personality.tone}
+
+GUIDELINES:
+- Explain complex scientific concepts in accessible language
+- Reference figures, tables, and formulas with clear verbal descriptions
+- Maintain the specified tone throughout
+- Create a natural, conversational flow
+- Use analogies and examples to clarify difficult concepts`;
+
+  // Add tone-specific guidance
+  if (agent.personality.tone === 'humorous') {
+    return basePrompt + `
+
+HUMOR GUIDELINES:
+- Include appropriate jokes or witty observations
+- Use playful analogies
+- Keep humor relevant to the content
+- Don't force jokes - let them arise naturally`;
+  } else if (agent.personality.tone === 'serious') {
+    return basePrompt + `
+
+FORMAL GUIDELINES:
+- Maintain academic rigor
+- Use precise scientific terminology
+- Avoid colloquialisms
+- Focus on clarity and accuracy`;
+  } else if (agent.personality.tone === 'casual') {
+    return basePrompt + `
+
+CASUAL GUIDELINES:
+- Use everyday language and informal expressions
+- Speak as if explaining to a friend
+- Include relatable examples from daily life
+- Keep it relaxed and approachable`;
+  } else if (agent.personality.tone === 'formal') {
+    return basePrompt + `
+
+FORMAL GUIDELINES:
+- Use proper academic conventions
+- Maintain professional distance
+- Organize information systematically
+- Use precise technical terminology`;
+  } else if (agent.personality.tone === 'enthusiastic') {
+    return basePrompt + `
+
+ENTHUSIASTIC GUIDELINES:
+- Express excitement about the discoveries
+- Use dynamic, engaging language
+- Emphasize the fascinating aspects
+- Convey passion for the subject matter`;
+  }
   
-  logger.info('Calling LLM for script generation (placeholder)');
-  
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  // Return a mock script for testing
-  // In production, this would be the actual LLM response
-  return `Welcome to this segment of our lecture. Today we'll explore some fascinating concepts from the scientific literature. 
+  return basePrompt;
+}
 
-The research presents compelling evidence that advances our understanding of the field. Let me walk you through the key findings and what they mean for us.
-
-First, let's consider the fundamental principles at play here. The data shows clear patterns that we can interpret and learn from. This is particularly interesting because it challenges some of our previous assumptions.
-
-Looking at the figures presented in this work, we can see visual representations that help clarify these complex ideas. The graphs demonstrate trends that are both surprising and enlightening.
-
-The tables provide us with concrete numbers that support the conclusions. When we examine this data carefully, we notice important relationships between the variables being studied.
-
-The mathematical formulas give us a precise way to describe these phenomena. Each symbol represents a specific quantity, and together they form an equation that captures the essence of what's happening.
-
-In conclusion, this segment has covered important ground in our understanding of the topic. These findings contribute significantly to the broader field of study.`;
+/**
+ * Call LLM API to generate script for a segment
+ */
+async function callScriptGenerationLLM(prompt: string, agent: LectureAgent): Promise<string> {
+  try {
+    const model = getRecommendedModel('script', llmService.getProvider());
+    
+    logger.info('Calling LLM for script generation', { model, agentId: agent.id });
+    
+    // Build personality-specific system prompt
+    const systemPrompt = buildScriptSystemPrompt(agent);
+    
+    const response = await llmService.chat({
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      model,
+      temperature: 0.8, // Higher for more creative/personality-driven output
+      maxTokens: 2000,
+    });
+    
+    logger.info('Script generation completed successfully', {
+      scriptLength: response.content.length,
+    });
+    
+    return response.content;
+  } catch (error) {
+    logger.error('Script generation LLM call failed', { error, agentId: agent.id });
+    throw new Error(`Failed to generate script: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**
@@ -512,7 +619,7 @@ async function generateScriptForSegment(
   const prompt = createSegmentPrompt(segment, agent, segmentIndex, totalSegments);
   
   // Call LLM to generate script
-  const scriptText = await callScriptGenerationLLM(prompt);
+  const scriptText = await callScriptGenerationLLM(prompt, agent);
   
   // Apply personality modifications
   const modifiedScript = applyPersonalityModifications(scriptText, agent);

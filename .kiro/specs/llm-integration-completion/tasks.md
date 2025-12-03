@@ -64,38 +64,38 @@
     - Verify segment structure is valid
     - _Requirements: 1.3, 5.1_
 
-- [ ] 2. Implement Script Generation LLM Integration
-  - [ ] 2.1 Update callScriptGenerationLLM function signature
+- [-] 2. Implement Script Generation LLM Integration
+  - [x] 2.1 Update callScriptGenerationLLM function signature
     - Add agent parameter to function
     - Import llmService and getRecommendedModel
     - Update all call sites to pass agent
     - _Requirements: 2.1_
-  - [ ] 2.2 Implement buildScriptSystemPrompt function
+  - [x] 2.2 Implement buildScriptSystemPrompt function
     - Create base system prompt
     - Incorporate agent personality instructions
     - Add tone-specific guidance for humorous agents
     - Add tone-specific guidance for serious agents
     - Handle all personality tone types
     - _Requirements: 2.2, 2.4, 2.5_
-  - [ ] 2.3 Replace placeholder implementation
+  - [x] 2.3 Replace placeholder implementation
     - Call llmService.chat with agent-specific prompt
     - Use higher temperature (0.8) for creativity
     - Parse response content
     - Add error handling with retry logic
     - _Requirements: 2.1, 2.6, 2.7_
-  - [ ] 2.4 Enhance segment prompt construction
+  - [x] 2.4 Enhance segment prompt construction
     - Include segment content
     - Include visual element descriptions
     - Add context about segment position
     - Add length guidance
     - _Requirements: 2.3_
-  - [ ] 2.5 Write unit tests for script generation
+  - [x] 2.5 Write unit tests for script generation
     - Test system prompt construction for different agents
     - Test prompt construction with various segments
     - Test error handling
     - Mock LLM service
     - _Requirements: 2.1, 2.2, 2.4, 2.5_
-  - [ ] 2.6 Write integration test for script generation
+  - [x] 2.6 Write integration test for script generation
     - Test with real LLM API
     - Generate scripts with humorous agent
     - Generate scripts with serious agent

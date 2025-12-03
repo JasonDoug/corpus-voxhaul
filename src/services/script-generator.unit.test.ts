@@ -14,6 +14,15 @@ import { SegmentedContent, ContentSegment } from '../models/content';
 // Mock the dynamodb module
 jest.mock('./dynamodb');
 
+// Mock the llm module
+jest.mock('./llm', () => ({
+  llmService: {
+    chat: jest.fn(),
+    getProvider: jest.fn(() => 'openrouter'),
+  },
+  getRecommendedModel: jest.fn(() => 'openai/gpt-4-turbo-preview'),
+}));
+
 describe('Script Generator Unit Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -358,6 +367,7 @@ describe('Script Generator Unit Tests', () => {
 
     it('should use default agent if none specified', async () => {
       const { getContent, updateContent, getAgent, updateJob, getJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
 
       const segmentedContent: SegmentedContent = {
         segments: [
@@ -382,6 +392,12 @@ describe('Script Generator Unit Tests', () => {
       getAgent.mockResolvedValue(null);
       updateContent.mockResolvedValue({});
       updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'Generated script with default agent.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
 
       const script = await generateScript('job123');
 
@@ -393,6 +409,7 @@ describe('Script Generator Unit Tests', () => {
   describe('generateScript - with different agent personalities', () => {
     it('should generate script with humorous agent', async () => {
       const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
 
       const humorousAgent: LectureAgent = {
         id: 'humorous-agent',
@@ -432,6 +449,12 @@ describe('Script Generator Unit Tests', () => {
       getAgent.mockResolvedValue(humorousAgent);
       updateContent.mockResolvedValue({});
       updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'A humorous script with jokes!',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
 
       const script = await generateScript('job123', 'humorous-agent');
 
@@ -442,6 +465,7 @@ describe('Script Generator Unit Tests', () => {
 
     it('should generate script with serious agent', async () => {
       const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
 
       const seriousAgent: LectureAgent = {
         id: 'serious-agent',
@@ -481,6 +505,12 @@ describe('Script Generator Unit Tests', () => {
       getAgent.mockResolvedValue(seriousAgent);
       updateContent.mockResolvedValue({});
       updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'A serious, formal script.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
 
       const script = await generateScript('job123', 'serious-agent');
 
@@ -493,6 +523,7 @@ describe('Script Generator Unit Tests', () => {
   describe('generateScript - with visual elements', () => {
     it('should handle segments with many visual elements', async () => {
       const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
 
       const agent: LectureAgent = {
         id: 'test-agent',
@@ -559,6 +590,13 @@ describe('Script Generator Unit Tests', () => {
       getAgent.mockResolvedValue(agent);
       updateContent.mockResolvedValue({});
       updateJob.mockResolvedValue({});
+      
+      // Mock LLM response
+      llmService.chat.mockResolvedValue({
+        content: 'Generated script with visual elements description.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
 
       const script = await generateScript('job123', 'test-agent');
 
@@ -571,6 +609,411 @@ describe('Script Generator Unit Tests', () => {
         expect(block.contentReference).toBeDefined();
         expect(block.contentReference.pageNumber).toBeGreaterThan(0);
       }
+    });
+  });
+
+  describe('LLM Integration Tests', () => {
+    beforeEach(() => {
+      const { llmService } = require('./llm');
+      llmService.chat.mockClear();
+    });
+
+    it('should call LLM service with correct parameters for humorous agent', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const humorousAgent: LectureAgent = {
+        id: 'humorous-agent',
+        name: 'Funny Professor',
+        description: 'A humorous agent',
+        personality: {
+          instructions: 'Make jokes and use humor',
+          tone: 'humorous',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Test Segment',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Test content about quantum mechanics',
+                pageReference: 1,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(humorousAgent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'A humorous script about quantum mechanics with jokes!',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await generateScript('job123', 'humorous-agent');
+
+      // Verify LLM was called
+      expect(llmService.chat).toHaveBeenCalled();
+      
+      // Verify the call included the system prompt with humor guidelines
+      const callArgs = llmService.chat.mock.calls[0][0];
+      expect(callArgs.messages).toHaveLength(2);
+      expect(callArgs.messages[0].role).toBe('system');
+      expect(callArgs.messages[0].content).toContain('humorous');
+      expect(callArgs.messages[0].content).toContain('HUMOR GUIDELINES');
+      expect(callArgs.messages[0].content).toContain('jokes');
+      
+      // Verify temperature is set for creativity
+      expect(callArgs.temperature).toBe(0.8);
+    });
+
+    it('should call LLM service with correct parameters for serious agent', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const seriousAgent: LectureAgent = {
+        id: 'serious-agent',
+        name: 'Serious Professor',
+        description: 'A serious agent',
+        personality: {
+          instructions: 'Be formal and academic',
+          tone: 'serious',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Test Segment',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Test content about quantum mechanics',
+                pageReference: 1,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(seriousAgent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'A serious, formal script about quantum mechanics.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await generateScript('job123', 'serious-agent');
+
+      // Verify LLM was called
+      expect(llmService.chat).toHaveBeenCalled();
+      
+      // Verify the call included the system prompt with formal guidelines
+      const callArgs = llmService.chat.mock.calls[0][0];
+      expect(callArgs.messages[0].role).toBe('system');
+      expect(callArgs.messages[0].content).toContain('serious');
+      expect(callArgs.messages[0].content).toContain('FORMAL GUIDELINES');
+      expect(callArgs.messages[0].content).toContain('academic rigor');
+    });
+
+    it('should include segment context in prompt', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const agent: LectureAgent = {
+        id: 'test-agent',
+        name: 'Test Professor',
+        description: 'A test agent',
+        personality: {
+          instructions: 'Be clear',
+          tone: 'casual',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Introduction',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Introduction content',
+                pageReference: 1,
+              },
+            ],
+            prerequisites: [],
+          },
+          {
+            id: 'seg2',
+            title: 'Middle Section',
+            order: 1,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Middle content',
+                pageReference: 2,
+              },
+            ],
+            prerequisites: [],
+          },
+          {
+            id: 'seg3',
+            title: 'Conclusion',
+            order: 2,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Conclusion content',
+                pageReference: 3,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(agent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'Generated script.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await generateScript('job123', 'test-agent');
+
+      // Verify LLM was called 3 times (once per segment)
+      expect(llmService.chat).toHaveBeenCalledTimes(3);
+      
+      // Check first segment has "FIRST segment" context
+      const firstCall = llmService.chat.mock.calls[0][0];
+      expect(firstCall.messages[1].content).toContain('FIRST segment');
+      
+      // Check last segment has "FINAL segment" context
+      const lastCall = llmService.chat.mock.calls[2][0];
+      expect(lastCall.messages[1].content).toContain('FINAL segment');
+    });
+
+    it('should include visual element summary in prompt', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const agent: LectureAgent = {
+        id: 'test-agent',
+        name: 'Test Professor',
+        description: 'A test agent',
+        personality: {
+          instructions: 'Be clear',
+          tone: 'casual',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Visual Elements',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'figure',
+                content: {
+                  id: 'fig1',
+                  pageNumber: 1,
+                  imageData: 'data:image/png;base64,test',
+                  description: 'A graph',
+                  caption: 'Figure 1',
+                },
+                pageReference: 1,
+              },
+              {
+                type: 'table',
+                content: {
+                  id: 'table1',
+                  pageNumber: 2,
+                  headers: ['A', 'B'],
+                  rows: [['1', '2']],
+                  interpretation: 'Data table',
+                },
+                pageReference: 2,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(agent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'Generated script with visual elements.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await generateScript('job123', 'test-agent');
+
+      // Verify the prompt includes visual element summary
+      const callArgs = llmService.chat.mock.calls[0][0];
+      expect(callArgs.messages[1].content).toContain('VISUAL ELEMENTS');
+      expect(callArgs.messages[1].content).toContain('1 figure(s)');
+      expect(callArgs.messages[1].content).toContain('1 table(s)');
+    });
+
+    it('should include length guidance in prompt', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const agent: LectureAgent = {
+        id: 'test-agent',
+        name: 'Test Professor',
+        description: 'A test agent',
+        personality: {
+          instructions: 'Be clear',
+          tone: 'casual',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Test',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Test content',
+                pageReference: 1,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(agent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      llmService.chat.mockResolvedValue({
+        content: 'Generated script.',
+        model: 'openai/gpt-4-turbo-preview',
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      });
+
+      await generateScript('job123', 'test-agent');
+
+      // Verify the prompt includes length guidance
+      const callArgs = llmService.chat.mock.calls[0][0];
+      expect(callArgs.messages[1].content).toContain('LENGTH GUIDANCE');
+      expect(callArgs.messages[1].content).toMatch(/\d+-\d+ minutes/);
+    });
+
+    it('should handle LLM errors gracefully', async () => {
+      const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
+      const { llmService } = require('./llm');
+
+      const agent: LectureAgent = {
+        id: 'test-agent',
+        name: 'Test Professor',
+        description: 'A test agent',
+        personality: {
+          instructions: 'Be clear',
+          tone: 'casual',
+        },
+        voice: {
+          voiceId: 'voice1',
+          speed: 1.0,
+          pitch: 0,
+        },
+        createdAt: new Date(),
+      };
+
+      const segmentedContent: SegmentedContent = {
+        segments: [
+          {
+            id: 'seg1',
+            title: 'Test',
+            order: 0,
+            contentBlocks: [
+              {
+                type: 'text',
+                content: 'Test content',
+                pageReference: 1,
+              },
+            ],
+            prerequisites: [],
+          },
+        ],
+      };
+
+      getContent.mockResolvedValue({ jobId: 'job123', segmentedContent });
+      getAgent.mockResolvedValue(agent);
+      updateContent.mockResolvedValue({});
+      updateJob.mockResolvedValue({});
+      
+      // Mock LLM error
+      llmService.chat.mockRejectedValue(new Error('API rate limit exceeded'));
+
+      await expect(generateScript('job123', 'test-agent')).rejects.toThrow('Failed to generate script');
     });
   });
 });
