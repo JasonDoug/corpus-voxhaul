@@ -9,10 +9,12 @@ The PDF Lecture Service is a serverless application that analyzes scientific PDF
 ## Features
 
 - **Multi-modal Content Analysis**: Extracts and interprets text, figures, tables, formulas, and citations
+  - ⚠️ **Note**: Image extraction from PDFs is not yet implemented. See [docs/IMAGE_EXTRACTION_TODO.md](docs/IMAGE_EXTRACTION_TODO.md) for details.
 - **Intelligent Segmentation**: Organizes content into logical topic flows with prerequisite ordering
 - **Customizable Agents**: Multiple lecture personalities with different tones and voice characteristics
 - **Audio Synthesis**: High-quality text-to-speech with word-level timing
 - **Immersive Reader**: Synchronized PDF and script highlighting during playback
+- **LLM Integration**: Fully integrated with OpenRouter, OpenAI, and Anthropic for vision and text analysis
 
 ## Prerequisites
 
@@ -118,9 +120,25 @@ Each stage is implemented as an independent serverless function for scalability.
 
 ## Documentation
 
+- **[Implementation Status](docs/IMPLEMENTATION_STATUS.md)** - Complete status of all features (95% complete)
 - **[User Guide](docs/USER_GUIDE.md)** - Complete guide for using the service
 - **[API Documentation](docs/API.md)** - Detailed API reference with examples
 - **[Deployment Guide](DEPLOYMENT.md)** - Local setup and production deployment
+- **[Image Extraction TODO](docs/IMAGE_EXTRACTION_TODO.md)** - Implementation gap and how to fix it
+
+## Known Limitations
+
+### Image Extraction (Implementation Gap)
+
+The Content Analyzer currently uses **placeholder image data** instead of extracting actual images from PDFs. The vision LLM integration is fully functional, but needs real image data to produce meaningful figure descriptions.
+
+**Status**: Vision API integration complete ✅ | Image extraction incomplete ❌
+
+**Impact**: Figure descriptions will be generic placeholders until image extraction is implemented.
+
+**Solution**: See [docs/IMAGE_EXTRACTION_TODO.md](docs/IMAGE_EXTRACTION_TODO.md) for detailed implementation guide with three different approaches (quick win vs. production-ready).
+
+**Estimated effort**: 2-4 hours (quick win) or 1-2 days (production quality)
 
 ## Quick Links
 
