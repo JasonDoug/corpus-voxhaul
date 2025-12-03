@@ -39,12 +39,30 @@ export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<PageContent
     // pdf-parse gives us the full text, but we need to split by pages
     // For now, we'll create a simple page structure
     // In a production system, we'd use a more sophisticated library like pdf.js
-    const totalPages = data.numpages;
+    let totalPages = data.numpages;
     const fullText = data.text;
+    
+    // Handle case where pdf-parse reports 0 pages but we have text
+    // This can happen with certain PDF formats
+    if (totalPages === 0 && fullText.length > 0) {
+      logger.warn('PDF reports 0 pages but has text content, estimating page count', {
+        textLength: fullText.length,
+      });
+      // Estimate pages based on typical page length (~3000 chars per page)
+      totalPages = Math.max(1, Math.ceil(fullText.length / 3000));
+      logger.info('Estimated page count', { estimatedPages: totalPages });
+    }
     
     // Simple heuristic: split text roughly equally across pages
     // This is a simplification - real implementation would need proper page detection
     const pages: PageContent[] = [];
+    
+    if (totalPages === 0) {
+      // No pages and no text - return empty array
+      logger.warn('PDF has no pages and no text content');
+      return pages;
+    }
+    
     const textPerPage = Math.ceil(fullText.length / totalPages);
     
     for (let i = 0; i < totalPages; i++) {

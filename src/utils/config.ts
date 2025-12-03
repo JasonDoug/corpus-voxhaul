@@ -45,5 +45,12 @@ export const config = {
     enableRealSegmentation: process.env.ENABLE_REAL_SEGMENTATION === 'true',
     enableRealScriptGeneration: process.env.ENABLE_REAL_SCRIPT_GENERATION === 'true',
     enableImageExtraction: process.env.ENABLE_IMAGE_EXTRACTION === 'true',
+    enableVisionFirstPipeline: process.env.ENABLE_VISION_FIRST_PIPELINE === 'true',
+  },
+  
+  vision: {
+    model: process.env.VISION_MODEL || 'google/gemini-2.0-flash-exp:free',
+    temperature: parseFloat(process.env.VISION_LLM_TEMPERATURE || '0.3'),
+    maxTokens: parseInt(process.env.VISION_LLM_MAX_TOKENS || '4000', 10),
   },
 };
