@@ -605,7 +605,7 @@ ty 8: Formula explanation**
     - Measure synchronization drift over full lecture duration
     - Verify drift remains under 200ms
     - _Requirements: 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5_
-  - [ ] 20.6 Performance and cost validation
+  - [x] 20.6 Performance and cost validation
     - **Note**: Cost tracking already implemented in `src/utils/llm-metrics.ts` with per-job summaries
     - **Note**: All LLM calls automatically log cost estimates based on token usage
     - **Note**: Free models (Gemini, Grok, Llama) tracked with $0 cost
