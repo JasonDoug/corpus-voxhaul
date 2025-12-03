@@ -692,7 +692,7 @@ ty 8: Formula explanation**
     - Run: `aws dynamodb list-tables --query 'TableNames[?starts_with(@, \`pdf-lecture-service-dev\`)]'`
     - Should see 3 DynamoDB tables (jobs, agents, content)
     - _Requirements: 9.1, 9.3_
-  - [ ] 21.6 Create and configure API key
+  - [x] 21.6 Create and configure API key
     - Run: `aws apigateway create-api-key --name "pdf-lecture-dev-key" --enabled --region us-west-2`
     - Save the 'id' from the response
     - Run: `aws apigateway get-api-key --api-key <id-from-above> --include-value --region us-west-2`
@@ -700,7 +700,7 @@ ty 8: Formula explanation**
     - Run: `export API_KEY="<value-from-above>"`
     - Run: `export API_ENDPOINT="<endpoint-from-21.5>"`
     - _Requirements: 9.1_
-  - [ ] 21.7 Test deployment with status endpoint
+  - [x] 21.7 Test deployment with status endpoint
     - Run: `curl -X GET "$API_ENDPOINT/status/test-job-id" -H "x-api-key: $API_KEY"`
     - Should return 404 with error message (expected - job doesn't exist)
     - This confirms API Gateway and Lambda are working
@@ -732,7 +732,7 @@ ty 8: Formula explanation**
     - Check CloudWatch alarms: `aws cloudwatch describe-alarms --alarm-name-prefix pdf-lecture-service-dev`
     - Should see alarms for timeouts and error rates
     - _Requirements: 9.2_
-  - [ ] 21.11 Document deployment details
+  - [x] 21.11 Document deployment details
     - Save API endpoint to a secure location
     - Save API key to a secure location (password manager)
     - Document agent ID for future reference
