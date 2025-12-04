@@ -4,7 +4,7 @@ Description: PDF Lecture Service - Serverless application for converting scienti
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: nodejs18.x
     MemorySize: 1024
     Timeout: 300
     Environment:
@@ -319,6 +319,68 @@ Resources:
             Path: /status/{jobId}
             Method: GET
 
+  AgentsFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/agents.ts
+        External:
+          - canvas
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/agents.agentsHandler
+      Description: Manages lecture agents (CRUD operations)
+      Timeout: 30
+      MemorySize: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AgentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: !GetAtt AgentsTable.Arn
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+      Events:
+        ListAgentsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents
+            Method: GET
+        CreateAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents
+            Method: POST
+        GetAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: GET
+        UpdateAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: PUT
+        DeleteAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: DELETE
+
   # DynamoDB Tables
   JobsTable:
     Type: AWS::DynamoDB::Table
@@ -459,6 +521,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${StatusFunction}'
+      RetentionInDays: 30
+
+  AgentsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AgentsFunction}'
       RetentionInDays: 30
 
   # CloudWatch Metric Filters

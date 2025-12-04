@@ -30,9 +30,9 @@ export const config = {
   },
   
   dynamodb: {
-    jobsTable: process.env.DYNAMODB_JOBS_TABLE || 'pdf-lecture-jobs',
-    agentsTable: process.env.DYNAMODB_AGENTS_TABLE || 'pdf-lecture-agents',
-    contentTable: process.env.DYNAMODB_CONTENT_TABLE || 'pdf-lecture-content',
+    jobsTable: process.env.DYNAMODB_TABLE_JOBS || 'pdf-lecture-jobs',
+    agentsTable: process.env.DYNAMODB_TABLE_AGENTS || 'pdf-lecture-agents',
+    contentTable: process.env.DYNAMODB_TABLE_CONTENT || 'pdf-lecture-content',
   },
   
   processing: {
