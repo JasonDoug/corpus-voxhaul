@@ -12,9 +12,9 @@ export const config = {
   eventBusName: process.env.EVENT_BUS_NAME || 'pdf-lecture-service-events',
   
   aws: {
-    region: process.env.AWS_REGION || 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION || 'us-west-2',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || undefined,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || undefined,
   },
   
   localstack: {
@@ -23,10 +23,8 @@ export const config = {
   },
   
   s3: {
-    bucketName: process.env.S3_BUCKET_NAME || 'pdf-lecture-service',
-    pdfPrefix: process.env.S3_PDF_PREFIX || 'pdfs',
-    audioPrefix: process.env.S3_AUDIO_PREFIX || 'audio',
-    cachePrefix: process.env.S3_CACHE_PREFIX || 'cache',
+    pdfBucket: process.env.S3_BUCKET_PDFS || process.env.PDF_BUCKET_NAME || 'pdf-lecture-service-pdfs',
+    audioBucket: process.env.S3_BUCKET_AUDIO || process.env.AUDIO_BUCKET_NAME || 'pdf-lecture-service-audio',
   },
   
   dynamodb: {

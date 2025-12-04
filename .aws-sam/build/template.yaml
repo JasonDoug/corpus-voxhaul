@@ -93,7 +93,6 @@ Resources:
         - src/functions/upload.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -110,9 +109,17 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: JobsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ContentTable
       - EventBridgePutEventsPolicy:
           EventBusName:
             Ref: EventBus
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cloudwatch:PutMetricData
+          Resource: '*'
       Events:
         UploadApi:
           Type: Api
@@ -133,7 +140,6 @@ Resources:
         - src/functions/analyzer.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -187,7 +193,6 @@ Resources:
         - src/functions/segmenter.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -237,7 +242,6 @@ Resources:
         - src/functions/script.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -290,7 +294,6 @@ Resources:
         - src/functions/audio.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -341,7 +344,6 @@ Resources:
         - src/functions/status.ts
         External:
         - canvas
-        - aws-sdk
         Minify: true
         Sourcemap: true
         Target: es2022
@@ -351,7 +353,7 @@ Resources:
       Handler: status.statusHandler
       Description: Queries job status
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 1024
       Policies:
       - DynamoDBReadPolicy:
           TableName:

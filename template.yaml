@@ -94,7 +94,6 @@ Resources:
           - src/functions/upload.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/upload.uploadHandler
@@ -105,8 +104,15 @@ Resources:
             BucketName: !Ref PDFBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
         - EventBridgePutEventsPolicy:
             EventBusName: !Ref EventBus
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
       Events:
         UploadApi:
           Type: Api
@@ -127,7 +133,6 @@ Resources:
           - src/functions/analyzer.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/analyzer.analyzerHandler
@@ -172,7 +177,6 @@ Resources:
           - src/functions/segmenter.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/segmenter.segmenterHandler
@@ -214,7 +218,6 @@ Resources:
           - src/functions/script.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/script.scriptHandler
@@ -258,7 +261,6 @@ Resources:
           - src/functions/audio.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/audio.audioHandler
@@ -301,13 +303,12 @@ Resources:
           - src/functions/status.ts
         External:
           - canvas
-          - aws-sdk
     Properties:
       CodeUri: ./
       Handler: src/functions/status.statusHandler
       Description: Queries job status
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 1024
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref JobsTable

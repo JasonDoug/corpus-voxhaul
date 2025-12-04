@@ -26,13 +26,28 @@ export async function uploadHandler(event: any): Promise<any> {
     logger.info('Upload function invoked', { correlationId });
     requestMetrics.incrementRequest('upload');
     
-    // Parse the request
-    // In a real Lambda with API Gateway, the file would come from event.body
-    // For now, we expect the event to have the structure we need
+    // Parse the request body from API Gateway
+    let body: any;
+    if (typeof event.body === 'string') {
+      body = JSON.parse(event.body);
+    } else {
+      body = event.body || event;
+    }
+    
+    // Convert base64 file to Buffer if needed
+    let fileBuffer: Buffer;
+    if (typeof body.file === 'string') {
+      fileBuffer = Buffer.from(body.file, 'base64');
+    } else if (Buffer.isBuffer(body.file)) {
+      fileBuffer = body.file;
+    } else {
+      throw new Error('Invalid file format - must be base64 string or Buffer');
+    }
+    
     const request: UploadRequest = {
-      file: event.file, // Buffer
-      filename: event.filename,
-      agentId: event.agentId,
+      file: fileBuffer,
+      filename: body.filename,
+      agentId: body.agentId,
     };
     
     // Track file size
