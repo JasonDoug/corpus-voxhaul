@@ -5,7 +5,7 @@ codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/agents.agentsHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["AgentsFunction"]
 
@@ -30,12 +30,26 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [function_build_definitions.781ea711-6c0b-492a-97db-826b52e5e797]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/upload.uploadHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["UploadFunction"]
 
@@ -55,24 +69,13 @@ External = ["canvas"]
 
 
 
-[function_build_definitions.7773e096-b545-469a-9d1b-e7b0cadd579d]
-codeuri = "/home/jason/Projects/Corpus-Vox"
-runtime = "nodejs18.x"
-architecture = "x86_64"
-handler = "src/functions/analyzer.analyzerHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
-packagetype = "Zip"
-functions = ["AnalyzerFunction"]
 
-[function_build_definitions.7773e096-b545-469a-9d1b-e7b0cadd579d.metadata]
-BuildMethod = "esbuild"
 
-[function_build_definitions.7773e096-b545-469a-9d1b-e7b0cadd579d.metadata.BuildProperties]
-Minify = true
-Target = "es2022"
-Sourcemap = true
-EntryPoints = ["src/functions/analyzer.ts"]
-External = ["canvas"]
+
+
+
+
+
 
 
 
@@ -85,7 +88,7 @@ codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/segmenter.segmenterHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["SegmenterFunction"]
 
@@ -105,12 +108,26 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [function_build_definitions.7fcbd2d6-de87-4834-8015-aa2e9da530de]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/script.scriptHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["ScriptFunction"]
 
@@ -130,12 +147,26 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [function_build_definitions.e560924c-723a-4a43-adb4-829ceff1ffbf]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/audio.audioHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["AudioFunction"]
 
@@ -155,12 +186,26 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [function_build_definitions.7b0fed25-1a24-4e80-aaa8-ca260b25b47d]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
 architecture = "x86_64"
 handler = "src/functions/status.statusHandler"
-manifest_hash = "864bfd12d47359668d080870f876ec25"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
 packagetype = "Zip"
 functions = ["StatusFunction"]
 
@@ -173,6 +218,49 @@ Target = "es2022"
 Sourcemap = true
 EntryPoints = ["src/functions/status.ts"]
 External = ["canvas"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[function_build_definitions.51b78b86-eefd-4d30-9823-f052152b894f]
+codeuri = "/home/jason/Projects/Corpus-Vox"
+runtime = "nodejs18.x"
+architecture = "x86_64"
+handler = "src/functions/analyzer.analyzerHandler"
+manifest_hash = "d6eae09c4ee38b76430178766f02325b"
+packagetype = "Zip"
+functions = ["AnalyzerFunction"]
+
+[function_build_definitions.51b78b86-eefd-4d30-9823-f052152b894f.metadata]
+BuildMethod = "esbuild"
+
+[function_build_definitions.51b78b86-eefd-4d30-9823-f052152b894f.metadata.BuildProperties]
+Minify = true
+Target = "es2022"
+Sourcemap = true
+EntryPoints = ["src/functions/analyzer.ts"]
+
+
+
+
+
 
 
 

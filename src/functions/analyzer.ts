@@ -1,5 +1,6 @@
 // Analyzer function - Serverless function wrapper
-import { analyzeContent } from '../services/analyzer';
+// Conditional imports to avoid loading pdf-parse when using vision-first
+// import { analyzeContent } from '../services/analyzer';  // Only needed for legacy pipeline
 import { analyzeContentVisionFirst } from '../services/analyzer-vision';
 import { getJob, updateJob, getContent, createContent, updateContent } from '../services/dynamodb';
 import { triggerSegmentation } from '../services/eventbridge';
@@ -95,6 +96,9 @@ export async function analyzerHandler(event: any): Promise<any> {
     } else {
       // Legacy pipeline: separate analysis and segmentation steps
       logger.info('Using legacy multi-step pipeline', { jobId });
+      
+      // Dynamically import analyzer to avoid loading pdf-parse unless needed
+      const { analyzeContent } = await import('../services/analyzer');
       
       // Analyze the PDF content
       const extractedContent = await analyzeContent(jobId);

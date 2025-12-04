@@ -30,11 +30,16 @@
     "@thednp/dommatrix": "^2.0.9",
     "@types/pdf-parse": "^1.1.5",
     "aws-sdk": "^2.1498.0",
+    "canvas": "^3.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "pdf-img-convert": "^1.0.0",
+    "node-poppler": "^7.2.4",
     "pdf-parse": "^2.2.2",
+    "pdf-to-img": "^4.5.0",
+    "pdf2img-lambda-friendly": "^2.0.0",
+    "pdfjs-dist": "^5.4.449",
+    "pngjs": "^7.0.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

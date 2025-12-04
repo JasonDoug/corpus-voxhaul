@@ -12,13 +12,11 @@
 
 import { logger } from '../utils/logger';
 import { SegmentedContent, ContentSegment } from '../models/content';
-import { downloadPDF } from './s3';
 import { llmService } from './llm';
 import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
 // Dynamic imports for modules with ESM/CJS issues
 const { v4: uuidv4 } = require('uuid');
-const { convert } = require('pdf-img-convert');
 
 /**
  * Page analysis result from vision LLM
@@ -32,34 +30,61 @@ interface PageAnalysis {
 }
 
 /**
- * Extract all pages from PDF as images
+ * Extract all pages from PDF as images by reading from S3
+ * Assumes images were already converted by the Python PDF-to-images Lambda
  */
-async function extractPagesAsImages(pdfBuffer: Buffer): Promise<string[]> {
+async function extractPagesAsImages(jobId: string): Promise<string[]> {
   try {
-    logger.info('Extracting all pages as images from PDF');
+    logger.info('Loading page images from S3', { jobId });
     
-    // Convert all pages to images
-    const images = await convert(pdfBuffer, {
-      base64: true,
-      width: 2000, // High resolution for vision models
-      height: 2000,
-    });
+    const AWS = require('aws-sdk');
+    const s3 = new AWS.S3();
     
-    if (!images || images.length === 0) {
-      throw new Error('No images extracted from PDF');
+    const bucket = process.env.S3_BUCKET_PDFS;
+    const prefix = `${jobId}_pages/`;
+    
+    // List all page images for this job
+    const listResponse = await s3.listObjectsV2({
+      Bucket: bucket,
+      Prefix: prefix,
+    }).promise();
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      throw new Error(`No page images found in S3 for job ${jobId}`);
     }
     
-    // Format as data URLs
-    const imageDataUrls = images.map((img: string) => `data:image/png;base64,${img}`);
+    // Sort by page number (assuming format: jobId_pages/page_1.png, page_2.png, etc.)
+    const imageKeys = listResponse.Contents
+      .map((obj: any) => obj.Key)
+      .filter((key: string) => key.endsWith('.png'))
+      .sort();
     
-    logger.info('Pages extracted as images', {
+    logger.info('Found page images in S3', {
+      jobId,
+      pageCount: imageKeys.length,
+    });
+    
+    // Download each image and convert to base64 data URL
+    const imageDataUrls: string[] = [];
+    for (const key of imageKeys) {
+      const imageResponse = await s3.getObject({
+        Bucket: bucket,
+        Key: key,
+      }).promise();
+      
+      const base64 = imageResponse.Body.toString('base64');
+      imageDataUrls.push(`data:image/png;base64,${base64}`);
+    }
+    
+    logger.info('Pages loaded as images', {
+      jobId,
       pageCount: imageDataUrls.length,
     });
     
     return imageDataUrls;
   } catch (error) {
-    logger.error('Failed to extract pages as images', { error });
-    throw new Error(`Failed to extract pages as images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logger.error('Failed to load page images from S3', { error, jobId });
+    throw new Error(`Failed to load page images: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -246,11 +271,9 @@ export async function analyzeContentVisionFirst(
       jobId,
     });
     
-    // Download PDF from S3
-    const pdfBuffer = await downloadPDF(jobId);
-    
-    // Extract all pages as images
-    const pageImages = await extractPagesAsImages(pdfBuffer);
+    // Extract all pages as images from S3
+    // (assumes Python Lambda already converted PDF to images)
+    const pageImages = await extractPagesAsImages(jobId);
     
     logger.info('Analyzing pages with vision LLM', {
       correlationId: requestId,

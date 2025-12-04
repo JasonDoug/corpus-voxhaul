@@ -24,6 +24,7 @@ Globals:
         MAX_PDF_SIZE_MB: 100
         ANALYSIS_TIMEOUT_MS: 300000
         AUDIO_SYNTHESIS_TIMEOUT_MS: 600000
+        ENABLE_VISION_FIRST_PIPELINE: 'true'
 
 Parameters:
   Stage:
@@ -131,14 +132,13 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/analyzer.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/analyzer.analyzerHandler
       Description: Analyzes PDF content and extracts all elements
       Timeout: 300
       MemorySize: 2048
+
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref PDFBucket
