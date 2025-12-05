@@ -25,6 +25,10 @@ Globals:
         ANALYSIS_TIMEOUT_MS: 300000
         AUDIO_SYNTHESIS_TIMEOUT_MS: 600000
         ENABLE_VISION_FIRST_PIPELINE: 'true'
+        ENABLE_REAL_SCRIPT_GENERATION: 'true'
+        ENABLE_REAL_SEGMENTATION: 'false'
+        VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
+
 
 Parameters:
   Stage:
@@ -122,6 +126,50 @@ Resources:
             Path: /upload
             Method: POST
 
+  # PDF Processing Layer (pypdfium2)
+  PdfLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${AWS::StackName}-PdfLayer'
+      Description: PDF processing utilities (pypdfium2)
+      ContentUri: pdf_layer.zip
+      CompatibleRuntimes:
+        - python3.13
+      RetentionPolicy: Retain
+
+  PdfToImagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/pdf-to-images/
+      Handler: app.handler
+      Runtime: python3.13
+      Description: Converts PDF pages to images for Vision pipeline
+      Timeout: 300
+      MemorySize: 2048
+      Layers:
+        - !Ref PdfLayer
+      Environment:
+        Variables:
+          S3_BUCKET_PDFS: !Ref PDFBucket
+          EVENT_BUS_NAME: !Ref EventBus
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref PDFBucket
+        - S3WritePolicy:
+            BucketName: !Ref PDFBucket
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ConvertEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - JobCreated
+
   AnalyzerFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -135,7 +183,7 @@ Resources:
     Properties:
       CodeUri: ./
       Handler: src/functions/analyzer.analyzerHandler
-      Description: Analyzes PDF content and extracts all elements
+      Description: Analyzes PDF content and extracts all elements (Vision First Enabled - v2)
       Timeout: 300
       MemorySize: 2048
 
@@ -157,7 +205,7 @@ Resources:
               source:
                 - pdf-lecture-service
               detail-type:
-                - JobCreated
+                - ImagesGenerated
         AnalyzeApi:
           Type: Api
           Properties:

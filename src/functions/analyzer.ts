@@ -3,7 +3,7 @@
 // import { analyzeContent } from '../services/analyzer';  // Only needed for legacy pipeline
 import { analyzeContentVisionFirst } from '../services/analyzer-vision';
 import { getJob, updateJob, getContent, createContent, updateContent } from '../services/dynamodb';
-import { triggerSegmentation } from '../services/eventbridge';
+import { triggerSegmentation, triggerScriptGeneration } from '../services/eventbridge';
 import { ErrorResponse } from '../models/errors';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
@@ -15,10 +15,10 @@ import { config } from '../utils/config';
  */
 export async function analyzerHandler(event: any): Promise<any> {
   try {
-    logger.info('Analyzer function invoked');
+    logger.info('Analyzer function invoked', { eventType: event['detail-type'] || 'DirectInvocation' });
     
-    // Parse the request
-    const jobId = event.jobId;
+    // Parse the request - handle both EventBridge events and direct invocations
+    const jobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
     
     if (!jobId) {
       throw new Error('jobId is required');
@@ -81,6 +81,14 @@ export async function analyzerHandler(event: any): Promise<any> {
         jobId,
         segmentCount: segmentedContent.segments.length,
       });
+      
+      // Trigger script generation asynchronously in production
+      // Since vision pipeline skips segmentation, we trigger script generation directly
+      // (emitting SegmentationCompleted event which ScriptFunction listens to)
+      if (config.nodeEnv === 'production') {
+        await triggerScriptGeneration(jobId);
+        logger.info('Script generation triggered asynchronously', { jobId });
+      }
       
       return {
         statusCode: 200,
@@ -152,7 +160,9 @@ export async function analyzerHandler(event: any): Promise<any> {
       };
     }
   } catch (error) {
-    logger.error('Analyzer handler error', { error });
+    // Ensure the jobId variable is used, not event.jobId
+    const currentJobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
+    logger.error('Analyzer handler error', { jobId: currentJobId, error });
     
     const errorResponse: ErrorResponse = {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -161,14 +171,14 @@ export async function analyzerHandler(event: any): Promise<any> {
     };
     
     // Try to update job status to failed
-    if (event.jobId) {
+    if (currentJobId) { 
       try {
-        const job = await getJob(event.jobId);
-        if (job) {
-          await updateJob(event.jobId, {
+        const jobToUpdate = await getJob(currentJobId);
+        if (jobToUpdate) {
+          await updateJob(currentJobId, {
             status: 'failed',
             error: errorResponse.error,
-            stages: job.stages.map(stage =>
+            stages: jobToUpdate.stages.map(stage =>
               stage.stage === 'analysis'
                 ? { ...stage, status: 'failed', error: errorResponse.error }
                 : stage
@@ -176,7 +186,7 @@ export async function analyzerHandler(event: any): Promise<any> {
           });
         }
       } catch (updateError) {
-        logger.error('Failed to update job status', { error: updateError });
+        logger.error('Failed to update job status in error handler', { jobId: currentJobId, error: updateError });
       }
     }
     

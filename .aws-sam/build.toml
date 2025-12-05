@@ -44,6 +44,15 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
 [function_build_definitions.781ea711-6c0b-492a-97db-826b52e5e797]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
@@ -62,6 +71,15 @@ Target = "es2022"
 Sourcemap = true
 EntryPoints = ["src/functions/upload.ts"]
 External = ["canvas"]
+
+
+
+
+
+
+
+
+
 
 
 
@@ -122,6 +140,15 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
 [function_build_definitions.7fcbd2d6-de87-4834-8015-aa2e9da530de]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
@@ -140,6 +167,15 @@ Target = "es2022"
 Sourcemap = true
 EntryPoints = ["src/functions/script.ts"]
 External = ["canvas"]
+
+
+
+
+
+
+
+
+
 
 
 
@@ -200,6 +236,15 @@ External = ["canvas"]
 
 
 
+
+
+
+
+
+
+
+
+
 [function_build_definitions.7b0fed25-1a24-4e80-aaa8-ca260b25b47d]
 codeuri = "/home/jason/Projects/Corpus-Vox"
 runtime = "nodejs18.x"
@@ -218,6 +263,15 @@ Target = "es2022"
 Sourcemap = true
 EntryPoints = ["src/functions/status.ts"]
 External = ["canvas"]
+
+
+
+
+
+
+
+
+
 
 
 
@@ -267,5 +321,23 @@ EntryPoints = ["src/functions/analyzer.ts"]
 
 
 
+
+
+
+
+
+
+
+
+
+
+[function_build_definitions.874b0865-0a1c-4e61-9023-c8eb441b505f]
+codeuri = "/home/jason/Projects/Corpus-Vox/src/functions/pdf-to-images"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "app.handler"
+manifest_hash = "3298f13049d19cffaa37ca931dd4d421"
+packagetype = "Zip"
+functions = ["PdfToImagesFunction"]
 
 [layer_build_definitions]

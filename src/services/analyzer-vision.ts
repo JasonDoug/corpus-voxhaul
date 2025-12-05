@@ -280,12 +280,23 @@ export async function analyzeContentVisionFirst(
       pageCount: pageImages.length,
     });
     
-    // Analyze each page with vision LLM (in parallel for speed)
-    const pageAnalyses = await Promise.all(
-      pageImages.map((image, index) =>
-        analyzePageWithVision(image, index + 1, `${requestId}-page-${index + 1}`)
-      )
-    );
+    // Analyze each page with vision LLM (sequentially to avoid rate limits)
+    const pageAnalyses: PageAnalysis[] = [];
+    
+    for (let i = 0; i < pageImages.length; i++) {
+      const image = pageImages[i];
+      const pageNum = i + 1;
+      
+      logger.info(`Processing page ${pageNum} of ${pageImages.length}`, { correlationId: requestId });
+      
+      const analysis = await analyzePageWithVision(image, pageNum, `${requestId}-page-${pageNum}`);
+      pageAnalyses.push(analysis);
+      
+      // Add delay between pages to respect rate limits
+      if (i < pageImages.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
     
     // Aggregate segments from all pages
     let allSegments: ContentSegment[] = [];

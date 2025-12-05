@@ -36,6 +36,9 @@ Globals:
         ANALYSIS_TIMEOUT_MS: 300000
         AUDIO_SYNTHESIS_TIMEOUT_MS: 600000
         ENABLE_VISION_FIRST_PIPELINE: 'true'
+        ENABLE_REAL_SCRIPT_GENERATION: 'true'
+        ENABLE_REAL_SEGMENTATION: 'false'
+        VISION_MODEL: nvidia/nemotron-nano-12b-v2-vl:free
 Parameters:
   Stage:
     Type: String
@@ -132,6 +135,56 @@ Resources:
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
+  PdfLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Sub: ${AWS::StackName}-PdfLayer
+      Description: PDF processing utilities (pypdfium2)
+      ContentUri: ../../pdf_layer.zip
+      CompatibleRuntimes:
+      - python3.13
+      RetentionPolicy: Retain
+  PdfToImagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: PdfToImagesFunction
+      Handler: app.handler
+      Runtime: python3.13
+      Description: Converts PDF pages to images for Vision pipeline
+      Timeout: 300
+      MemorySize: 2048
+      Layers:
+      - Ref: PdfLayer
+      Environment:
+        Variables:
+          S3_BUCKET_PDFS:
+            Ref: PDFBucket
+          EVENT_BUS_NAME:
+            Ref: EventBus
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: PDFBucket
+      - S3WritePolicy:
+          BucketName:
+            Ref: PDFBucket
+      - EventBridgePutEventsPolicy:
+          EventBusName:
+            Ref: EventBus
+      Events:
+        ConvertEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName:
+              Ref: EventBus
+            Pattern:
+              source:
+              - pdf-lecture-service
+              detail-type:
+              - JobCreated
+    Metadata:
+      SamResourceId: PdfToImagesFunction
   AnalyzerFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -146,11 +199,10 @@ Resources:
     Properties:
       CodeUri: AnalyzerFunction
       Handler: analyzer.analyzerHandler
-      Description: Analyzes PDF content and extracts all elements
+      Description: Analyzes PDF content and extracts all elements (Vision First Enabled
+        - v2)
       Timeout: 300
       MemorySize: 2048
-      Layers:
-      - arn:aws:lambda:us-west-2:456522530654:layer:poppler-utils:1
       Policies:
       - S3ReadPolicy:
           BucketName:
@@ -174,7 +226,7 @@ Resources:
               source:
               - pdf-lecture-service
               detail-type:
-              - JobCreated
+              - ImagesGenerated
         AnalyzeApi:
           Type: Api
           Properties:
