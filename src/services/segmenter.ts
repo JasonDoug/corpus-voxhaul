@@ -47,12 +47,13 @@ Please respond with a JSON object in the following format:
 }
 
 Guidelines:
-- Create 3-8 segments depending on content complexity
-- Each segment should cover a cohesive topic
+- Create as many segments as needed to organize the content into logical, cohesive topics
+- Each segment should represent a distinct concept or theme that can be understood as a unit
 - Segments should flow logically from foundational to advanced concepts
 - Prerequisites should only reference earlier segments (lower indices)
 - Include all relevant figures, tables, formulas for each segment
 - Ensure all content is assigned to at least one segment
+- Aim for segments that are substantial enough to be meaningful but focused enough to be digestible
 
 Respond ONLY with the JSON object, no additional text.`;
 

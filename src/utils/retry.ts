@@ -37,6 +37,11 @@ function isRetryableError(error: any, retryableErrors: string[]): boolean {
     return error.retryable;
   }
   
+  // Check error name (for custom error classes)
+  if (error.name && retryableErrors.includes(error.name)) {
+    return true;
+  }
+  
   // Check error code
   if (error.code && retryableErrors.includes(error.code)) {
     return true;
@@ -49,7 +54,9 @@ function isRetryableError(error: any, retryableErrors: string[]): boolean {
     message.includes('connection') ||
     message.includes('network') ||
     message.includes('temporary') ||
-    message.includes('rate limit')
+    message.includes('rate limit') ||
+    message.includes('429') ||
+    message.includes('too many requests')
   );
 }
 

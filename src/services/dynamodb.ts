@@ -16,10 +16,8 @@ if (config.localstack.useLocalStack) {
   dynamoDBConfig.endpoint = config.localstack.endpoint;
   dynamoDBConfig.accessKeyId = 'test';
   dynamoDBConfig.secretAccessKey = 'test';
-} else if (config.aws.accessKeyId && config.aws.secretAccessKey) {
-  dynamoDBConfig.accessKeyId = config.aws.accessKeyId;
-  dynamoDBConfig.secretAccessKey = config.aws.secretAccessKey;
 }
+// In Lambda, don't set credentials - they're provided automatically via execution role
 
 const dynamoDB = new AWS.DynamoDB.DocumentClient(dynamoDBConfig);
 

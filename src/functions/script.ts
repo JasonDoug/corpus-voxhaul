@@ -13,10 +13,10 @@ import { config } from '../utils/config';
  */
 export async function scriptHandler(event: any): Promise<any> {
   try {
-    logger.info('Script generator function invoked');
+    logger.info('Script generator function invoked', { eventType: event['detail-type'] || 'DirectInvocation' });
     
-    // Parse the request
-    const jobId = event.jobId;
+    // Parse the request - handle both EventBridge events and direct invocations
+    const jobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
     const agentId = event.agentId; // Optional agent ID override
     
     if (!jobId) {
@@ -28,16 +28,20 @@ export async function scriptHandler(event: any): Promise<any> {
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
     }
-    
-    // Update job status to 'generating_script'
-    await updateJob(jobId, {
+
+    logger.info('ScriptFunction: Job object before first update', { jobId, job });
+    const updatesForScriptGeneration = {
       status: 'generating_script',
       stages: job.stages.map(stage =>
         stage.stage === 'script_generation'
           ? { ...stage, status: 'in_progress', startedAt: new Date() }
           : stage
       ),
-    });
+    };
+    logger.info('ScriptFunction: Updates object for first update', { jobId, updates: updatesForScriptGeneration });
+    
+    // Update job status to 'generating_script'
+    await updateJob(jobId, updatesForScriptGeneration);
     
     logger.info('Starting script generation', { jobId, agentId });
     
@@ -79,23 +83,35 @@ export async function scriptHandler(event: any): Promise<any> {
       }),
     };
   } catch (error) {
-    logger.error('Script generator handler error', { error });
+    // Ensure the jobId variable is used, not event.jobId
+    const currentJobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
+    
+    // Explicitly serialize the error object for better logging
+    const serializedError = {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
+      ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
+    };
+    
+    logger.error('Script generator handler error', { jobId: currentJobId, error: serializedError });
     
     const errorResponse: ErrorResponse = {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: serializedError.message,
       code: 'SCRIPT_GENERATION_FAILED',
-      retryable: true,
+      retryable: serializedError.retryable || true, // Default to true if not specified
     };
     
     // Try to update job status to failed
-    if (event.jobId) {
+    if (currentJobId) {
       try {
-        const job = await getJob(event.jobId);
-        if (job) {
-          await updateJob(event.jobId, {
+        const jobToUpdate = await getJob(currentJobId);
+        if (jobToUpdate) {
+          await updateJob(currentJobId, {
             status: 'failed',
             error: errorResponse.error,
-            stages: job.stages.map(stage =>
+            stages: jobToUpdate.stages.map(stage =>
               stage.stage === 'script_generation'
                 ? { ...stage, status: 'failed', error: errorResponse.error }
                 : stage
@@ -103,7 +119,7 @@ export async function scriptHandler(event: any): Promise<any> {
           });
         }
       } catch (updateError) {
-        logger.error('Failed to update job status', { error: updateError });
+        logger.error('Failed to update job status in error handler', { jobId: currentJobId, error: updateError });
       }
     }
     

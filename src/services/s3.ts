@@ -21,10 +21,9 @@ if (config.localstack.useLocalStack) {
   s3Config.endpoint = config.localstack.endpoint;
   s3Config.accessKeyId = 'test';
   s3Config.secretAccessKey = 'test';
-} else if (config.aws.accessKeyId && config.aws.secretAccessKey) {
-  s3Config.accessKeyId = config.aws.accessKeyId;
-  s3Config.secretAccessKey = config.aws.secretAccessKey;
 }
+// In Lambda, don't set credentials - they're provided automatically via execution role
+// Only set explicit credentials if they're actually provided
 
 const s3 = new AWS.S3(s3Config);
 
@@ -53,10 +52,10 @@ function handleS3Error(error: any, operation: string): never {
 export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: string): Promise<string> {
   return withRetry(async () => {
     try {
-      const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+      const key = `${jobId}/original.pdf`;
       
       await s3.putObject({
-        Bucket: config.s3.bucketName,
+        Bucket: config.s3.pdfBucket,
         Key: key,
         Body: pdfBuffer,
         ContentType: 'application/pdf',
@@ -70,9 +69,9 @@ export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: stri
       
       // Return the S3 URL
       if (config.localstack.useLocalStack) {
-        return `${config.localstack.endpoint}/${config.s3.bucketName}/${key}`;
+        return `${config.localstack.endpoint}/${config.s3.pdfBucket}/${key}`;
       }
-      return `https://${config.s3.bucketName}.s3.${config.aws.region}.amazonaws.com/${key}`;
+      return `https://${config.s3.pdfBucket}.s3.${config.aws.region}.amazonaws.com/${key}`;
     } catch (error) {
       handleS3Error(error, 'uploadPDF');
     }
@@ -81,10 +80,10 @@ export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: stri
 
 export async function downloadPDF(jobId: string): Promise<Buffer> {
   try {
-    const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+    const key = `${jobId}/original.pdf`;
     
     const result = await s3.getObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Key: key,
     }).promise();
     
@@ -97,10 +96,10 @@ export async function downloadPDF(jobId: string): Promise<Buffer> {
 
 export async function streamPDF(jobId: string): Promise<Readable> {
   try {
-    const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+    const key = `${jobId}/original.pdf`;
     
     const stream = s3.getObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Key: key,
     }).createReadStream();
     
@@ -113,10 +112,10 @@ export async function streamPDF(jobId: string): Promise<Readable> {
 
 export async function deletePDF(jobId: string): Promise<void> {
   try {
-    const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+    const key = `${jobId}/original.pdf`;
     
     await s3.deleteObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Key: key,
     }).promise();
     
@@ -128,10 +127,10 @@ export async function deletePDF(jobId: string): Promise<void> {
 
 export async function getPDFSignedUrl(jobId: string, expiresIn: number = 3600): Promise<string> {
   try {
-    const key = `${config.s3.pdfPrefix}/${jobId}/original.pdf`;
+    const key = `${jobId}/original.pdf`;
     
     const url = s3.getSignedUrl('getObject', {
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Key: key,
       Expires: expiresIn,
     });
@@ -149,10 +148,10 @@ export async function getPDFSignedUrl(jobId: string, expiresIn: number = 3600): 
 
 export async function uploadAudio(jobId: string, audioBuffer: Buffer): Promise<string> {
   try {
-    const key = `${config.s3.audioPrefix}/${jobId}/lecture.mp3`;
+    const key = `${jobId}/lecture.mp3`;
     
     await s3.putObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.audioBucket,
       Key: key,
       Body: audioBuffer,
       ContentType: 'audio/mpeg',
@@ -165,9 +164,9 @@ export async function uploadAudio(jobId: string, audioBuffer: Buffer): Promise<s
     
     // Return the S3 URL
     if (config.localstack.useLocalStack) {
-      return `${config.localstack.endpoint}/${config.s3.bucketName}/${key}`;
+      return `${config.localstack.endpoint}/${config.s3.audioBucket}/${key}`;
     }
-    return `https://${config.s3.bucketName}.s3.${config.aws.region}.amazonaws.com/${key}`;
+    return `https://${config.s3.audioBucket}.s3.${config.aws.region}.amazonaws.com/${key}`;
   } catch (error) {
     handleS3Error(error, 'uploadAudio');
   }
@@ -175,10 +174,10 @@ export async function uploadAudio(jobId: string, audioBuffer: Buffer): Promise<s
 
 export async function downloadAudio(jobId: string): Promise<Buffer> {
   try {
-    const key = `${config.s3.audioPrefix}/${jobId}/lecture.mp3`;
+    const key = `${jobId}/lecture.mp3`;
     
     const result = await s3.getObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.audioBucket,
       Key: key,
     }).promise();
     
@@ -191,10 +190,10 @@ export async function downloadAudio(jobId: string): Promise<Buffer> {
 
 export async function streamAudio(jobId: string): Promise<Readable> {
   try {
-    const key = `${config.s3.audioPrefix}/${jobId}/lecture.mp3`;
+    const key = `${jobId}/lecture.mp3`;
     
     const stream = s3.getObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.audioBucket,
       Key: key,
     }).createReadStream();
     
@@ -207,10 +206,10 @@ export async function streamAudio(jobId: string): Promise<Readable> {
 
 export async function deleteAudio(jobId: string): Promise<void> {
   try {
-    const key = `${config.s3.audioPrefix}/${jobId}/lecture.mp3`;
+    const key = `${jobId}/lecture.mp3`;
     
     await s3.deleteObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.audioBucket,
       Key: key,
     }).promise();
     
@@ -222,10 +221,10 @@ export async function deleteAudio(jobId: string): Promise<void> {
 
 export async function getAudioSignedUrl(jobId: string, expiresIn: number = 3600): Promise<string> {
   try {
-    const key = `${config.s3.audioPrefix}/${jobId}/lecture.mp3`;
+    const key = `${jobId}/lecture.mp3`;
     
     const url = s3.getSignedUrl('getObject', {
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.audioBucket,
       Key: key,
       Expires: expiresIn,
     });
@@ -253,7 +252,7 @@ export async function uploadCacheFile(
     const key = `${config.s3.cachePrefix}/${jobId}/${fileType}s/${fileId}.${extension}`;
     
     await s3.putObject({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Key: key,
       Body: buffer,
       ContentType: contentType,
@@ -268,9 +267,9 @@ export async function uploadCacheFile(
     
     // Return the S3 URL
     if (config.localstack.useLocalStack) {
-      return `${config.localstack.endpoint}/${config.s3.bucketName}/${key}`;
+      return `${config.localstack.endpoint}/${config.s3.pdfBucket}/${key}`;
     }
-    return `https://${config.s3.bucketName}.s3.${config.aws.region}.amazonaws.com/${key}`;
+    return `https://${config.s3.pdfBucket}.s3.${config.aws.region}.amazonaws.com/${key}`;
   } catch (error) {
     handleS3Error(error, 'uploadCacheFile');
   }
@@ -286,7 +285,7 @@ export async function downloadCacheFile(jobId: string, fileType: string, fileId:
       try {
         const key = `${config.s3.cachePrefix}/${jobId}/${fileType}s/${fileId}.${ext}`;
         const result = await s3.getObject({
-          Bucket: config.s3.bucketName,
+          Bucket: config.s3.pdfBucket,
           Key: key,
         }).promise();
         
@@ -312,7 +311,7 @@ export async function deleteCacheFiles(jobId: string): Promise<void> {
     
     // List all objects with the prefix
     const listResult = await s3.listObjectsV2({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Prefix: prefix,
     }).promise();
     
@@ -323,7 +322,7 @@ export async function deleteCacheFiles(jobId: string): Promise<void> {
     
     // Delete all objects
     await s3.deleteObjects({
-      Bucket: config.s3.bucketName,
+      Bucket: config.s3.pdfBucket,
       Delete: {
         Objects: listResult.Contents.map(obj => ({ Key: obj.Key! })),
       },
@@ -346,15 +345,15 @@ export async function createBucketIfNotExists(): Promise<void> {
   }
   
   try {
-    await s3.headBucket({ Bucket: config.s3.bucketName }).promise();
-    logger.info(`Bucket ${config.s3.bucketName} already exists`);
+    await s3.headBucket({ Bucket: config.s3.pdfBucket }).promise();
+    logger.info(`Bucket ${config.s3.pdfBucket} already exists`);
   } catch (error: any) {
     if (error.code === 'NotFound' || error.code === 'NoSuchBucket') {
       try {
-        await s3.createBucket({ Bucket: config.s3.bucketName }).promise();
-        logger.info(`Bucket ${config.s3.bucketName} created`);
+        await s3.createBucket({ Bucket: config.s3.pdfBucket }).promise();
+        logger.info(`Bucket ${config.s3.pdfBucket} created`);
       } catch (createError) {
-        logger.error(`Failed to create bucket ${config.s3.bucketName}`, { error: createError });
+        logger.error(`Failed to create bucket ${config.s3.pdfBucket}`, { error: createError });
       }
     } else {
       logger.error('Error checking bucket existence', { error });
