@@ -220,12 +220,22 @@ IMPORTANT:
   } catch (error) {
     const duration = Date.now() - startTime;
     
+    // Explicitly serialize the error object for better logging
+    const serializedError = {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      // Include any custom properties from RateLimitError or other custom errors
+      ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
+      ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
+    };
+    
     logger.error('Vision page analysis failed', {
       correlationId: requestId,
       pageNumber,
-      error,
+      error: serializedError, // Log the serialized error
       duration,
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorMessage: serializedError.message,
     });
     
     // Record failure metrics
@@ -238,7 +248,7 @@ IMPORTANT:
       totalTokens: 0,
       durationMs: duration,
       success: false,
-      errorType: error instanceof Error ? error.message : 'Unknown error',
+      errorType: serializedError.message, // Use the serialized error message
     });
     
     throw error;
@@ -346,10 +356,19 @@ export async function analyzeContentVisionFirst(
     
     return result;
   } catch (error) {
+    // Explicitly serialize the error object for better logging
+    const serializedError = {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
+      ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
+    };
+    
     logger.error('Vision-first content analysis failed', {
       correlationId: requestId,
       jobId,
-      error,
+      error: serializedError, // Log the serialized error
     });
     throw error;
   }

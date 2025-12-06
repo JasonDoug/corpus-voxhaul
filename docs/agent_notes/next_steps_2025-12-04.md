@@ -2,18 +2,18 @@
 
 This document outlines the remaining tasks and future improvements identified during the integration and debugging of the Vision First pipeline.
 
-## Immediate Next Steps (High Priority)
+## Immediate Next Steps (Cleanup & Refinement)
 
-1.  **Monitor Script and Audio Stages:**
-    *   Verify that the `ScriptFunction` successfully completes (generates script using LLM) for a single-page PDF.
-    *   Ensure the `ScriptFunction` emits the correct event (`ScriptGenerationCompleted`).
-    *   Confirm that the `AudioFunction` is triggered by this event and successfully synthesizes audio.
-    *   Verify the final job status transitions to `completed` and the audio URL is available.
+1.  **Remove Excessive Logging:**
+    *   The `ScriptFunction` and `AudioFunction` currently have verbose debug logging (printing full job objects). These should be removed or lowered to DEBUG level to reduce log noise and costs.
 
 2.  **Address CloudWatch Metrics Permissions:**
     *   The `AnalyzerFunction` (and potentially other functions) logs `Failed to publish metric to CloudWatch` due to missing IAM permissions (`cloudwatch:PutMetricData`).
     *   **Action:** Update the IAM role policy for `AnalyzerFunction` (and other relevant Lambda functions) to include `cloudwatch:PutMetricData` action. This will enable proper observability of LLM call metrics.
     *   **Location:** Likely in `template.yaml`, within the `Policies` section for the relevant functions or the `LambdaExecutionRole`.
+
+3.  **Frontend Integration:**
+    *   Ensure the frontend correctly displays the `completed` status and renders the audio player using the `audioUrl`.
 
 ## Short-Term Improvements
 
@@ -43,10 +43,6 @@ This document outlines the remaining tasks and future improvements identified du
 4.  **Cost Optimization:**
     *   Monitor LLM token usage and costs. Optimize prompts and model calls to reduce token consumption.
     *   Explore cost-effective LLM models or dedicated paid tiers for production usage.
-
-5.  **Frontend Integration:**
-    *   Ensure the frontend can correctly display job status updates in real-time or near real-time.
-    *   Implement an audio player for the final synthesized lecture.
 
 ## Technical Debt / Modernization
 

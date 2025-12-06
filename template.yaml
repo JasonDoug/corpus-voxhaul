@@ -28,6 +28,7 @@ Globals:
         ENABLE_REAL_SCRIPT_GENERATION: 'true'
         ENABLE_REAL_SEGMENTATION: 'false'
         VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
+        LLM_MODEL_SCRIPT: 'tngtech/deepseek-r1t2-chimera:free'
 
 
 Parameters:
@@ -132,7 +133,7 @@ Resources:
     Properties:
       LayerName: !Sub '${AWS::StackName}-PdfLayer'
       Description: PDF processing utilities (pypdfium2)
-      ContentUri: pdf_layer.zip
+      ContentUri: layers/pdf_layer.zip
       CompatibleRuntimes:
         - python3.13
       RetentionPolicy: Retain
@@ -322,6 +323,10 @@ Resources:
             TableName: !Ref JobsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ContentTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AgentsTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
       Events:
         AudioEvent:
           Type: EventBridgeRule

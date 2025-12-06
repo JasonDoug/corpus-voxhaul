@@ -41,3 +41,6 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# SAM Build Artifacts
+.aws-sam/
