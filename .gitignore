@@ -10,6 +10,14 @@ dist/
 # Environment
 .env
 .env.local
+.env.production
+.env.*.local
+.env.antigravity
+
+# AWS credentials (should never be committed)
+.aws/
+aws-credentials.txt
+*credentials*.txt
 
 # IDE
 .vscode/
@@ -34,3 +42,6 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# SAM Build Artifacts
+.aws-sam/

@@ -4,7 +4,7 @@ Description: PDF Lecture Service - Serverless application for converting scienti
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: nodejs18.x
     MemorySize: 1024
     Timeout: 300
     Environment:
@@ -24,6 +24,14 @@ Globals:
         MAX_PDF_SIZE_MB: 100
         ANALYSIS_TIMEOUT_MS: 300000
         AUDIO_SYNTHESIS_TIMEOUT_MS: 600000
+        ENABLE_VISION_FIRST_PIPELINE: 'true'
+        ENABLE_REAL_SCRIPT_GENERATION: 'true'
+        ENABLE_REAL_SEGMENTATION: 'false'
+        VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
+        LLM_MODEL_SCRIPT: 'tngtech/deepseek-r1t2-chimera:free'
+        TTS_PROVIDER: 'polly'
+        POLLY_ENGINE: 'generative'
+
 
 Parameters:
   Stage:
@@ -84,9 +92,19 @@ Resources:
   # Lambda Functions
   UploadFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/upload.ts
+        External:
+          - canvas
     Properties:
-      CodeUri: dist/functions/
-      Handler: upload.uploadHandler
+      CodeUri: ./
+      Handler: src/functions/upload.uploadHandler
       Description: Accepts PDF uploads and initiates processing pipeline
       Timeout: 60
       Policies:
@@ -94,8 +112,15 @@ Resources:
             BucketName: !Ref PDFBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContentTable
         - EventBridgePutEventsPolicy:
             EventBusName: !Ref EventBus
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
       Events:
         UploadApi:
           Type: Api
@@ -104,14 +129,67 @@ Resources:
             Path: /upload
             Method: POST
 
-  AnalyzerFunction:
+  # PDF Processing Layer (pypdfium2)
+  PdfLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${AWS::StackName}-PdfLayer'
+      Description: PDF processing utilities (pypdfium2)
+      ContentUri: layers/pdf_layer.zip
+      CompatibleRuntimes:
+        - python3.13
+      RetentionPolicy: Retain
+
+  PdfToImagesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: analyzer.analyzerHandler
-      Description: Analyzes PDF content and extracts all elements
+      CodeUri: src/functions/pdf-to-images/
+      Handler: app.handler
+      Runtime: python3.13
+      Description: Converts PDF pages to images for Vision pipeline
       Timeout: 300
       MemorySize: 2048
+      Layers:
+        - !Ref PdfLayer
+      Environment:
+        Variables:
+          S3_BUCKET_PDFS: !Ref PDFBucket
+          EVENT_BUS_NAME: !Ref EventBus
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref PDFBucket
+        - S3WritePolicy:
+            BucketName: !Ref PDFBucket
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ConvertEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - pdf-lecture-service
+              detail-type:
+                - JobCreated
+
+  AnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/analyzer.ts
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/analyzer.analyzerHandler
+      Description: Analyzes PDF content and extracts all elements (Vision First Enabled - v2)
+      Timeout: 300
+      MemorySize: 2048
+
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref PDFBucket
@@ -130,7 +208,7 @@ Resources:
               source:
                 - pdf-lecture-service
               detail-type:
-                - JobCreated
+                - ImagesGenerated
         AnalyzeApi:
           Type: Api
           Properties:
@@ -140,9 +218,19 @@ Resources:
 
   SegmenterFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/segmenter.ts
+        External:
+          - canvas
     Properties:
-      CodeUri: dist/functions/
-      Handler: segmenter.segmenterHandler
+      CodeUri: ./
+      Handler: src/functions/segmenter.segmenterHandler
       Description: Segments content into logical topics
       Timeout: 300
       Policies:
@@ -171,9 +259,19 @@ Resources:
 
   ScriptFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/script.ts
+        External:
+          - canvas
     Properties:
-      CodeUri: dist/functions/
-      Handler: script.scriptHandler
+      CodeUri: ./
+      Handler: src/functions/script.scriptHandler
       Description: Generates lecture script with personality
       Timeout: 300
       Policies:
@@ -204,9 +302,19 @@ Resources:
 
   AudioFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/audio.ts
+        External:
+          - canvas
     Properties:
-      CodeUri: dist/functions/
-      Handler: audio.audioHandler
+      CodeUri: ./
+      Handler: src/functions/audio.audioHandler
       Description: Synthesizes audio from lecture script
       Timeout: 600
       MemorySize: 2048
@@ -217,6 +325,15 @@ Resources:
             TableName: !Ref JobsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref ContentTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AgentsTable
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+        - Statement:
+            - Effect: Allow
+              Action:
+                - polly:SynthesizeSpeech
+              Resource: '*'
       Events:
         AudioEvent:
           Type: EventBridgeRule
@@ -236,12 +353,22 @@ Resources:
 
   StatusFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/status.ts
+        External:
+          - canvas
     Properties:
-      CodeUri: dist/functions/
-      Handler: status.statusHandler
+      CodeUri: ./
+      Handler: src/functions/status.statusHandler
       Description: Queries job status
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 1024
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref JobsTable
@@ -252,6 +379,103 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /status/{jobId}
             Method: GET
+
+  PlaybackFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/status.ts
+        External:
+          - canvas
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/status.playbackHandler
+      Description: API endpoint for retrieving lecture playback data
+      Timeout: 30
+      MemorySize: 1024
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ContentTable
+        - S3ReadPolicy:
+            BucketName: !Ref PDFBucket
+        - S3ReadPolicy:
+            BucketName: !Ref AudioBucket
+      Events:
+        PlaybackApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /playback/{jobId}
+            Method: GET
+
+  AgentsFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/agents.ts
+        External:
+          - canvas
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/agents.agentsHandler
+      Description: Manages lecture agents (CRUD operations)
+      Timeout: 30
+      MemorySize: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AgentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: !GetAtt AgentsTable.Arn
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+      Events:
+        ListAgentsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents
+            Method: GET
+        CreateAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents
+            Method: POST
+        GetAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: GET
+        UpdateAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: PUT
+        DeleteAgentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /agents/{agentId}
+            Method: DELETE
 
   # DynamoDB Tables
   JobsTable:
@@ -393,6 +617,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${StatusFunction}'
+      RetentionInDays: 30
+
+  AgentsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AgentsFunction}'
       RetentionInDays: 30
 
   # CloudWatch Metric Filters

@@ -1,0 +1,629 @@
+openapi: 3.0.3
+info:
+  title: PDF Lecture Service API
+  description: |
+    Transform scientific PDFs into engaging audio lectures with synchronized playback.
+    
+    The service uses a vision-first pipeline to analyze PDFs, generate lecture scripts with customizable agent personalities, and synthesize audio with word-level timing data.
+    
+    **Processing Pipeline:**
+    1. Upload PDF → 2. Vision Analysis → 3. Script Generation → 4. Audio Synthesis
+    
+    **Average Processing Time:** 30-60 seconds per PDF
+  version: 1.0.0
+  contact:
+    name: PDF Lecture Service
+    email: support@example.com
+  license:
+    name: MIT
+
+servers:
+  - url: https://vtqny8cp7e.execute-api.us-west-2.amazonaws.com/dev
+    description: Production (AWS)
+  - url: http://localhost:3000
+    description: Local Development
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Upload
+    description: PDF upload and job creation
+  - name: Status
+    description: Job status queries
+  - name: Agents
+    description: Lecture agent management
+  - name: Playback
+    description: Immersive reader playback
+  - name: Pipeline
+    description: Manual pipeline triggers (testing)
+
+paths:
+  /api/upload:
+    post:
+      tags:
+        - Upload
+      summary: Upload PDF
+      description: |
+        Upload a scientific PDF to start the processing pipeline.
+        
+        **Validation:**
+        - Maximum file size: 100MB
+        - File type: PDF only
+        - File must be readable
+        
+        **Returns:** Job ID for tracking processing status
+      operationId: uploadPDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file
+                - filename
+              properties:
+                file:
+                  type: string
+                  format: byte
+                  description: Base64-encoded PDF content
+                filename:
+                  type: string
+                  example: research-paper.pdf
+                agentId:
+                  type: string
+                  description: Optional pre-selected agent ID
+                  example: agent-123
+      responses:
+        '200':
+          description: PDF uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileTooLarge:
+                  value:
+                    error: File size exceeds 100MB limit
+                    code: FILE_TOO_LARGE
+                    retryable: false
+                invalidPDF:
+                  value:
+                    error: File is not a valid PDF document
+                    code: INVALID_PDF
+                    retryable: false
+
+  /api/status/{jobId}:
+    get:
+      tags:
+        - Status
+      summary: Get job status
+      description: Query the current processing status of a job
+      operationId: getJobStatus
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatus'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/agents:
+    get:
+      tags:
+        - Agents
+      summary: List all agents
+      description: Get all available lecture agents
+      operationId: listAgents
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+    
+    post:
+      tags:
+        - Agents
+      summary: Create agent
+      description: Create a new lecture agent with custom personality and voice
+      operationId: createAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/agents/{agentId}:
+    get:
+      tags:
+        - Agents
+      summary: Get agent by ID
+      description: Retrieve a specific lecture agent
+      operationId: getAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    put:
+      tags:
+        - Agents
+      summary: Update agent
+      description: Update an existing lecture agent
+      operationId: updateAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdate'
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+    
+    delete:
+      tags:
+        - Agents
+      summary: Delete agent
+      description: Delete a lecture agent
+      operationId: deleteAgent
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Agent deleted
+
+  /api/playback/{jobId}:
+    get:
+      tags:
+        - Playback
+      summary: Get playback data
+      description: Retrieve complete playback data for immersive reader
+      operationId: getPlaybackData
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Playback data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackData'
+
+  /api/player/{jobId}:
+    get:
+      tags:
+        - Playback
+      summary: Open immersive reader
+      description: Access the immersive reader playback interface (HTML page)
+      operationId: openPlayer
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML playback interface
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/analyze/{jobId}:
+    post:
+      tags:
+        - Pipeline
+      summary: Trigger analysis
+      description: Manually trigger content analysis (for testing)
+      operationId: triggerAnalysis
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Analysis triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+
+  /api/segment/{jobId}:
+    post:
+      tags:
+        - Pipeline
+      summary: Trigger segmentation
+      description: Manually trigger content segmentation (for testing)
+      operationId: triggerSegmentation
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Segmentation triggered
+
+  /api/script/{jobId}:
+    post:
+      tags:
+        - Pipeline
+      summary: Trigger script generation
+      description: Manually trigger script generation (for testing)
+      operationId: triggerScript
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+      responses:
+        '200':
+          description: Script generation triggered
+
+  /api/audio/{jobId}:
+    post:
+      tags:
+        - Pipeline
+      summary: Trigger audio synthesis
+      description: Manually trigger audio synthesis (for testing)
+      operationId: triggerAudio
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audio synthesis triggered
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key for authentication
+
+  schemas:
+    UploadResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          enum: [queued]
+        message:
+          type: string
+          example: PDF uploaded successfully. Processing started.
+
+    JobStatus:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - queued
+            - analyzing
+            - segmenting
+            - generating_script
+            - synthesizing_audio
+            - completed
+            - failed
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        pdfFilename:
+          type: string
+        agentId:
+          type: string
+        error:
+          type: string
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageStatus'
+
+    StageStatus:
+      type: object
+      properties:
+        stage:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        personality:
+          $ref: '#/components/schemas/Personality'
+        voice:
+          $ref: '#/components/schemas/Voice'
+        createdAt:
+          type: string
+          format: date-time
+
+    AgentCreate:
+      type: object
+      required:
+        - name
+        - description
+        - personality
+        - voice
+      properties:
+        name:
+          type: string
+          example: Dr. Enthusiastic
+        description:
+          type: string
+          example: An energetic professor who loves making science fun
+        personality:
+          $ref: '#/components/schemas/Personality'
+        voice:
+          $ref: '#/components/schemas/Voice'
+
+    AgentUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+        personality:
+          $ref: '#/components/schemas/Personality'
+        voice:
+          $ref: '#/components/schemas/Voice'
+
+    Personality:
+      type: object
+      required:
+        - instructions
+        - tone
+      properties:
+        instructions:
+          type: string
+          example: Explain concepts with enthusiasm and use relatable analogies
+        tone:
+          type: string
+          enum: [humorous, serious, casual, formal, enthusiastic]
+        examples:
+          type: array
+          items:
+            type: string
+
+    Voice:
+      type: object
+      required:
+        - voiceId
+        - speed
+        - pitch
+      properties:
+        voiceId:
+          type: string
+          example: en-US-Neural2-A
+        speed:
+          type: number
+          format: float
+          minimum: 0.5
+          maximum: 2.0
+          example: 1.0
+        pitch:
+          type: number
+          format: int32
+          minimum: -20
+          maximum: 20
+          example: 0
+
+    PlaybackData:
+      type: object
+      properties:
+        jobId:
+          type: string
+        pdfUrl:
+          type: string
+          format: uri
+        audioUrl:
+          type: string
+          format: uri
+        script:
+          $ref: '#/components/schemas/LectureScript'
+        wordTimings:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordTiming'
+
+    LectureScript:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScriptSegment'
+        totalEstimatedDuration:
+          type: number
+          format: float
+
+    ScriptSegment:
+      type: object
+      properties:
+        segmentId:
+          type: string
+        title:
+          type: string
+        scriptBlocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScriptBlock'
+
+    ScriptBlock:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        contentReference:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [text, figure, table, formula, citation]
+            id:
+              type: string
+            pageNumber:
+              type: integer
+        estimatedDuration:
+          type: number
+          format: float
+
+    WordTiming:
+      type: object
+      properties:
+        word:
+          type: string
+        startTime:
+          type: number
+          format: float
+        endTime:
+          type: number
+          format: float
+        scriptBlockId:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - FILE_TOO_LARGE
+            - INVALID_PDF
+            - UPLOAD_FAILED
+            - JOB_NOT_FOUND
+            - AGENT_NOT_FOUND
+            - VALIDATION_ERROR
+            - INTERNAL_ERROR
+            - EXTERNAL_SERVICE_ERROR
+        retryable:
+          type: boolean
+        details:
+          type: object

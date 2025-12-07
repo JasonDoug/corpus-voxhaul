@@ -13,10 +13,10 @@ import { config } from '../utils/config';
  */
 export async function audioHandler(event: any): Promise<any> {
   try {
-    logger.info('Audio synthesizer function invoked');
+    logger.info('Audio synthesizer function invoked', { eventType: event['detail-type'] || 'DirectInvocation' });
     
-    // Parse the request
-    const jobId = event.jobId;
+    // Parse the request - handle both EventBridge events and direct invocations
+    const jobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
     
     if (!jobId) {
       throw new Error('jobId is required');
@@ -62,28 +62,40 @@ export async function audioHandler(event: any): Promise<any> {
         audioOutput: {
           audioUrl: audioOutput.audioUrl,
           duration: audioOutput.duration,
-          wordTimingCount: audioOutput.wordTimings.length,
+          wordTimings: audioOutput.wordTimings.length,
         },
       }),
     };
   } catch (error) {
-    logger.error('Audio synthesizer handler error', { error });
+    // Ensure the jobId variable is used, not event.jobId
+    const currentJobId = event.detail?.jobId || event.jobId || event.pathParameters?.jobId;
+    
+    // Explicitly serialize the error object for better logging
+    const serializedError = {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
+      ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
+    };
+    
+    logger.error('Audio synthesizer handler error', { jobId: currentJobId, error: serializedError });
     
     const errorResponse: ErrorResponse = {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: serializedError.message,
       code: 'AUDIO_SYNTHESIS_FAILED',
-      retryable: true,
+      retryable: serializedError.retryable || true, // Default to true if not specified
     };
     
     // Try to update job status to failed
-    if (event.jobId) {
+    if (currentJobId) {
       try {
-        const job = await getJob(event.jobId);
-        if (job) {
-          await updateJob(event.jobId, {
+        const jobToUpdate = await getJob(currentJobId);
+        if (jobToUpdate) {
+          await updateJob(currentJobId, {
             status: 'failed',
             error: errorResponse.error,
-            stages: job.stages.map(stage =>
+            stages: jobToUpdate.stages.map(stage =>
               stage.stage === 'audio_synthesis'
                 ? { ...stage, status: 'failed', error: errorResponse.error }
                 : stage
@@ -91,7 +103,7 @@ export async function audioHandler(event: any): Promise<any> {
           });
         }
       } catch (updateError) {
-        logger.error('Failed to update job status', { error: updateError });
+        logger.error('Failed to update job status in error handler', { jobId: currentJobId, error: updateError });
       }
     }
     

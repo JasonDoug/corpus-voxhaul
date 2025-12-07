@@ -38,6 +38,7 @@ export interface VisionRequest {
   imageUrl: string;
   prompt: string;
   model?: string;
+  maxTokens?: number;
 }
 
 /**
@@ -46,15 +47,78 @@ export interface VisionRequest {
 export type LLMProvider = 'openrouter' | 'openai' | 'anthropic';
 
 /**
- * OpenRouter API client
+ * Rate limit error class
+ */
+class RateLimitError extends Error {
+  public retryable = true;
+  public retryAfter?: number;
+  
+  constructor(message: string, retryAfter?: number) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfter = retryAfter;
+  }
+}
+
+/**
+ * OpenRouter API client with enhanced rate limit handling
  */
 class OpenRouterClient {
   private apiKey: string;
   private baseUrl: string = 'https://openrouter.ai/api/v1';
   private appName: string = 'PDF Lecture Service';
+  private lastRequestTime: number = 0;
+  private minRequestInterval: number;
   
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+    // Configurable minimum interval between requests (default: 500ms for free tier)
+    this.minRequestInterval = parseInt(process.env.OPENROUTER_MIN_REQUEST_INTERVAL_MS || '500', 10);
+  }
+  
+  /**
+   * Rate limit requests to avoid hitting API limits
+   */
+  private async rateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      const waitTime = this.minRequestInterval - timeSinceLastRequest;
+      logger.debug('Rate limiting OpenRouter request', { waitTime });
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+  
+  /**
+   * Parse error response and extract rate limit info
+   */
+  private parseErrorResponse(status: number, errorText: string): Error {
+    try {
+      const errorData = JSON.parse(errorText);
+      
+      // Check for rate limit error
+      if (status === 429 || errorData.error?.code === 429) {
+        const message = errorData.error?.message || 'Rate limit exceeded';
+        const retryAfter = errorData.error?.metadata?.headers?.['X-RateLimit-Reset'];
+        
+        logger.warn('OpenRouter rate limit hit', {
+          message,
+          retryAfter,
+          remaining: errorData.error?.metadata?.headers?.['X-RateLimit-Remaining'],
+        });
+        
+        return new RateLimitError(message, retryAfter);
+      }
+      
+      // Other API errors
+      return new Error(`OpenRouter API error: ${status} - ${errorData.error?.message || errorText}`);
+    } catch (e) {
+      // If we can't parse the error, return a generic error
+      return new Error(`OpenRouter API error: ${status} - ${errorText}`);
+    }
   }
   
   async chat(request: LLMRequest): Promise<LLMResponse> {
@@ -67,6 +131,9 @@ class OpenRouterClient {
     });
     
     try {
+      // Apply rate limiting
+      await this.rateLimit();
+      
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -87,11 +154,22 @@ class OpenRouterClient {
       if (!response.ok) {
         const error = await response.text();
         logger.error('OpenRouter API error', { status: response.status, error });
-        throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+        throw this.parseErrorResponse(response.status, error);
       }
       
       const data: any = await response.json();
       const duration = Date.now() - startTime;
+      
+      // Log rate limit headers if available
+      const rateLimitHeaders = {
+        limit: response.headers.get('X-RateLimit-Limit'),
+        remaining: response.headers.get('X-RateLimit-Remaining'),
+        reset: response.headers.get('X-RateLimit-Reset'),
+      };
+      
+      if (rateLimitHeaders.remaining) {
+        logger.debug('OpenRouter rate limit status', rateLimitHeaders);
+      }
       
       const result = {
         content: data.choices[0].message.content,
@@ -138,48 +216,96 @@ class OpenRouterClient {
   
   async vision(request: VisionRequest): Promise<string> {
     const model = request.model || 'openai/gpt-4-vision-preview';
+    const startTime = Date.now();
     
     logger.info('OpenRouter vision request', { model });
     
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/pdf-lecture-service',
-        'X-Title': this.appName,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: request.prompt,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: request.imageUrl,
+    try {
+      // Apply rate limiting
+      await this.rateLimit();
+      
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://github.com/pdf-lecture-service',
+          'X-Title': this.appName,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: request.prompt,
                 },
-              },
-            ],
-          },
-        ],
-        max_tokens: 1024,
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('OpenRouter vision API error', { status: response.status, error });
-      throw new Error(`OpenRouter vision API error: ${response.status} - ${error}`);
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: request.imageUrl,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: request.maxTokens ?? 4096,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('OpenRouter vision API error', { status: response.status, error });
+        throw this.parseErrorResponse(response.status, error);
+      }
+      
+      const data: any = await response.json();
+      const duration = Date.now() - startTime;
+      
+      // Log rate limit headers if available
+      const rateLimitHeaders = {
+        limit: response.headers.get('X-RateLimit-Limit'),
+        remaining: response.headers.get('X-RateLimit-Remaining'),
+        reset: response.headers.get('X-RateLimit-Reset'),
+      };
+      
+      if (rateLimitHeaders.remaining) {
+        logger.debug('OpenRouter rate limit status', rateLimitHeaders);
+      }
+      
+      // Record metrics
+      recordLLMCallMetrics({
+        operation: 'vision',
+        model: data.model,
+        provider: 'openrouter',
+        promptTokens: data.usage?.prompt_tokens || 0,
+        completionTokens: data.usage?.completion_tokens || 0,
+        totalTokens: data.usage?.total_tokens || 0,
+        durationMs: duration,
+        success: true,
+      });
+      
+      return data.choices[0].message.content;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Record metrics for failed call
+      recordLLMCallMetrics({
+        operation: 'vision',
+        model,
+        provider: 'openrouter',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: duration,
+        success: false,
+        errorType: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      throw error;
     }
-    
-    const data: any = await response.json();
-    return data.choices[0].message.content;
   }
 }
 
@@ -517,31 +643,43 @@ export class LLMService {
   }
   
   /**
-   * Send a chat completion request
+   * Send a chat completion request with retry logic
    */
   async chat(request: LLMRequest): Promise<LLMResponse> {
+    // Configurable retry settings for OpenRouter
+    const maxAttempts = parseInt(process.env.LLM_MAX_RETRY_ATTEMPTS || '5', 10);
+    const initialDelay = parseInt(process.env.LLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
+    const maxDelay = parseInt(process.env.LLM_MAX_RETRY_DELAY_MS || '30000', 10);
+    
     return withRetry(
       async () => this.client.chat(request),
       {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 10000,
+        maxAttempts,
+        initialDelayMs: initialDelay,
+        maxDelayMs: maxDelay,
         backoffMultiplier: 2,
+        retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED', 'RateLimitError'],
       }
     );
   }
   
   /**
-   * Analyze an image with vision model
+   * Analyze an image with vision model with retry logic
    */
   async vision(request: VisionRequest): Promise<string> {
+    // More aggressive retry for vision (often hits rate limits)
+    const maxAttempts = parseInt(process.env.LLM_VISION_MAX_RETRY_ATTEMPTS || '5', 10);
+    const initialDelay = parseInt(process.env.LLM_VISION_INITIAL_RETRY_DELAY_MS || '3000', 10);
+    const maxDelay = parseInt(process.env.LLM_VISION_MAX_RETRY_DELAY_MS || '60000', 10);
+    
     return withRetry(
       async () => this.client.vision(request),
       {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        maxDelayMs: 10000,
+        maxAttempts,
+        initialDelayMs: initialDelay,
+        maxDelayMs: maxDelay,
         backoffMultiplier: 2,
+        retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED', 'RateLimitError'],
       }
     );
   }

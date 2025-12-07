@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "PDF Lecture Service",
+    "description": "Transform scientific PDFs into engaging audio lectures with synchronized playback.\n\n**Setup:**\n1. Set the `baseUrl` variable to your API endpoint\n2. Set the `apiKey` variable to your API key\n3. Run requests in order for a complete workflow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://vtqny8cp7e.execute-api.us-west-2.amazonaws.com/dev",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "rB5y5sScAKN3Ndoec3sq3iHQiaUpSt07A1XVuFYd",
+      "type": "string"
+    },
+    {
+      "key": "jobId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agentId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Agent Management",
+      "item": [
+        {
+          "name": "List All Agents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agents"]
+            },
+            "description": "Get all available lecture agents"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Humorous Agent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('agentId', response.id);",
+                  "    console.log('Agent ID saved:', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Humorous\",\n  \"description\": \"A witty professor who uses humor to explain complex topics\",\n  \"personality\": {\n    \"instructions\": \"Use jokes, puns, and funny analogies to make concepts memorable. Keep it lighthearted but informative.\",\n    \"tone\": \"humorous\",\n    \"examples\": [\n      \"Why did the photon check into a hotel? Because it was traveling light!\",\n      \"This equation is like a recipe, but instead of cookies, we get knowledge!\"\n    ]\n  },\n  \"voice\": {\n    \"voiceId\": \"en-US-Neural2-C\",\n    \"speed\": 1.0,\n    \"pitch\": 0\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agents"]
+            },
+            "description": "Create a humorous lecture agent. The agent ID will be saved automatically."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Serious Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Professor Serious\",\n  \"description\": \"A formal academic who maintains scholarly rigor\",\n  \"personality\": {\n    \"instructions\": \"Maintain academic tone and precise terminology. Focus on accuracy and clarity.\",\n    \"tone\": \"formal\"\n  },\n  \"voice\": {\n    \"voiceId\": \"en-US-Neural2-D\",\n    \"speed\": 0.95,\n    \"pitch\": -2\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agents"]
+            },
+            "description": "Create a serious, formal lecture agent"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Agent by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agents/{{agentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agents", "{{agentId}}"]
+            },
+            "description": "Get details of a specific agent"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Agent",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agents/{{agentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agents", "{{agentId}}"]
+            },
+            "description": "Delete a lecture agent"
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage lecture agents with different personalities"
+    },
+    {
+      "name": "2. PDF Upload & Processing",
+      "item": [
+        {
+          "name": "Upload PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('jobId', response.jobId);",
+                  "    console.log('Job ID saved:', response.jobId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file\": \"JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDYxMiA3OTJdL1BhcmVudCAyIDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+L0NvbnRlbnRzIDUgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvVGltZXMtUm9tYW4+PgplbmRvYmoKNSAwIG9iago8PC9MZW5ndGggNDQ+PgpzdHJlYW0KQlQKL0YxIDI0IFRmCjEwMCA3MDAgVGQKKFRlc3QgUERGKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMDY0IDAwMDAwIG4gCjAwMDAwMDAxMjEgMDAwMDAgbiAKMDAwMDAwMDI1NiAwMDAwMCBuIAowMDAwMDAwMzM0IDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDI3CiUlRU9G\",\n  \"filename\": \"test-paper.pdf\",\n  \"agentId\": \"{{agentId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "upload"]
+            },
+            "description": "Upload a PDF file (base64 encoded). This example uses a minimal test PDF. The job ID will be saved automatically.\n\n**Note:** Replace the `file` value with your actual base64-encoded PDF content."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/status/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "status", "{{jobId}}"]
+            },
+            "description": "Check the processing status of a job. Poll this endpoint every 3-5 seconds until status is 'completed'."
+          },
+          "response": []
+        }
+      ],
+      "description": "Upload PDFs and monitor processing"
+    },
+    {
+      "name": "3. Playback",
+      "item": [
+        {
+          "name": "Get Playback Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/playback/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "playback", "{{jobId}}"]
+            },
+            "description": "Get complete playback data including PDF URL, audio URL, script, and word timings"
+          },
+          "response": []
+        },
+        {
+          "name": "Open Immersive Reader",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/player/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "player", "{{jobId}}"]
+            },
+            "description": "Open the immersive reader HTML interface in a browser"
+          },
+          "response": []
+        }
+      ],
+      "description": "Access playback data and immersive reader"
+    },
+    {
+      "name": "4. Manual Pipeline Triggers (Testing)",
+      "item": [
+        {
+          "name": "Trigger Analysis",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analyze/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analyze", "{{jobId}}"]
+            },
+            "description": "Manually trigger content analysis (for testing/debugging)"
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Segmentation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/segment/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "segment", "{{jobId}}"]
+            },
+            "description": "Manually trigger content segmentation (for testing/debugging)"
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Script Generation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agentId\": \"{{agentId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/script/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "script", "{{jobId}}"]
+            },
+            "description": "Manually trigger script generation (for testing/debugging)"
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Audio Synthesis",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/audio/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "audio", "{{jobId}}"]
+            },
+            "description": "Manually trigger audio synthesis (for testing/debugging)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Manual pipeline triggers for testing and debugging"
+    }
+  ]
+}

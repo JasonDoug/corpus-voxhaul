@@ -46,12 +46,12 @@ export class MockTTSProvider implements TTSProvider {
     // Generate mock word timings
     const words = text.split(/\s+/).filter(w => w.length > 0);
     const wordTimings: WordTiming[] = [];
-    
+
     // Calculate timing based on voice speed
     // Base rate: 155 words per minute
     const wordsPerMinute = 155 * voiceConfig.speed;
     const secondsPerWord = 60 / wordsPerMinute;
-    
+
     let currentTime = 0;
     for (const word of words) {
       const wordDuration = secondsPerWord;
@@ -77,83 +77,131 @@ export class MockTTSProvider implements TTSProvider {
 /**
  * AWS Polly TTS Provider
  * Uses AWS Polly for text-to-speech synthesis
+ * 
+ * Supports multiple engines:
+ * - generative: Best quality, most natural (newest, limited voices)
+ * - long-form: Optimized for long content (news-style voices)
+ * - neural: High quality, natural (most voices available)
+ * - standard: Basic quality, fast (all voices available)
  */
 export class PollyTTSProvider implements TTSProvider {
   private polly: any; // AWS.Polly instance
+  private engine: string;
 
   constructor() {
     // Initialize AWS Polly client
-    // This would be configured based on environment
     const AWS = require('aws-sdk');
     const { config } = require('../utils/config');
-    
+
     const pollyConfig: any = {
       region: config.aws.region,
     };
-    
-    if (config.aws.accessKeyId && config.aws.secretAccessKey) {
+
+    // In Lambda, rely on environment variables (IAM role) which SDK picks up automatically.
+    // Explicitly setting credentials here is only needed for local development if not using
+    // default AWS CLI profile, or if config.localMode is enabled and explicit keys are provided.
+    if (config.localstack.useLocalStack && config.aws.accessKeyId && config.aws.secretAccessKey) {
       pollyConfig.accessKeyId = config.aws.accessKeyId;
       pollyConfig.secretAccessKey = config.aws.secretAccessKey;
     }
-    
+
     this.polly = new AWS.Polly(pollyConfig);
+
+    // Get engine from environment (generative, long-form, neural, standard)
+    this.engine = process.env.POLLY_ENGINE || 'neural';
+
+    logger.info('AWS Polly TTS Provider initialized', {
+      region: config.aws.region,
+      engine: this.engine,
+    });
   }
 
   async synthesize(text: string, voiceConfig: LectureAgent['voice']): Promise<TTSResult> {
     logger.info('AWS Polly TTS synthesis', {
       textLength: text.length,
       voiceId: voiceConfig.voiceId,
+      engine: this.engine,
     });
 
     return withRetryAndCircuitBreaker(
       'aws-polly',
       async () => {
         try {
-          // Request speech synthesis with word-level timing
-          const params = {
+          // Build synthesis parameters
+          const params: any = {
             Text: text,
             OutputFormat: 'mp3',
             VoiceId: voiceConfig.voiceId,
-            Engine: 'neural', // Use neural engine for better quality
-            SpeechMarkTypes: ['word'], // Request word-level timing
+            Engine: this.engine,
           };
+
+          // Add engine-specific parameters
+          if (this.engine === 'generative') {
+            // Generative engine doesn't support SpeechMarkTypes
+            // We'll need to estimate timings
+            logger.info('Using generative engine (word timings will be estimated)');
+          } else if (this.engine === 'long-form') {
+            // Long-form engine supports speech marks
+            params.SpeechMarkTypes = ['word'];
+          } else {
+            // Neural and standard engines support speech marks
+            params.SpeechMarkTypes = ['word'];
+          }
 
           // Get audio stream
           const audioResult = await this.polly.synthesizeSpeech(params).promise();
           const audioBuffer = audioResult.AudioStream as Buffer;
 
-          // Get word timing marks
-          const timingParams = {
-            ...params,
-            OutputFormat: 'json',
-          };
-          const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
-          const timingData = timingResult.AudioStream.toString('utf-8');
-          
-          // Parse timing marks (each line is a JSON object)
-          const wordTimings: WordTiming[] = [];
-          const lines = timingData.split('\n').filter((line: string) => line.trim());
-          
-          for (const line of lines) {
+          let wordTimings: WordTiming[] = [];
+          let duration = 0;
+
+          // Get word timing marks (if supported by engine)
+          if (this.engine !== 'generative') {
             try {
-              const mark = JSON.parse(line);
-              if (mark.type === 'word') {
-                wordTimings.push({
-                  word: mark.value,
-                  startTime: mark.time / 1000, // Convert ms to seconds
-                  endTime: (mark.time + mark.duration) / 1000,
-                  scriptBlockId: 'unknown', // Will be set later
-                });
+              const timingParams = {
+                ...params,
+                OutputFormat: 'json',
+              };
+              const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
+              const timingData = timingResult.AudioStream.toString('utf-8');
+
+              // Parse timing marks (each line is a JSON object)
+              const lines = timingData.split('\n').filter((line: string) => line.trim());
+
+              for (const line of lines) {
+                try {
+                  const mark = JSON.parse(line);
+                  if (mark.type === 'word') {
+                    wordTimings.push({
+                      word: mark.value,
+                      startTime: mark.time / 1000, // Convert ms to seconds
+                      endTime: (mark.time + (mark.duration || 0)) / 1000,
+                      scriptBlockId: 'unknown', // Will be set later
+                    });
+                  }
+                } catch (e) {
+                  logger.warn('Failed to parse timing mark', { line: line as string });
+                }
               }
-            } catch (e) {
-              logger.warn('Failed to parse timing mark', { line: line as string });
+
+              // Calculate duration from last word timing
+              duration = wordTimings.length > 0
+                ? wordTimings[wordTimings.length - 1].endTime
+                : 0;
+            } catch (timingError) {
+              logger.warn('Failed to get word timings, will estimate', { error: timingError });
+              // Fall through to estimation
             }
           }
 
-          // Calculate duration from last word timing
-          const duration = wordTimings.length > 0
-            ? wordTimings[wordTimings.length - 1].endTime
-            : 0;
+          // If we don't have timings (generative engine or timing fetch failed), estimate them
+          if (wordTimings.length === 0) {
+            logger.info('Estimating word timings based on voice speed');
+            wordTimings = this.estimateWordTimings(text, voiceConfig.speed);
+            duration = wordTimings.length > 0
+              ? wordTimings[wordTimings.length - 1].endTime
+              : 0;
+          }
 
           return {
             audioBuffer,
@@ -173,6 +221,34 @@ export class PollyTTSProvider implements TTSProvider {
       { failureThreshold: 5, timeout: 60000 }
     );
   }
+
+  /**
+   * Estimate word timings when actual timings are not available
+   * Used for generative engine or when timing fetch fails
+   */
+  private estimateWordTimings(text: string, speed: number): WordTiming[] {
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const wordTimings: WordTiming[] = [];
+
+    // Calculate timing based on voice speed
+    // Base rate: 155 words per minute
+    const wordsPerMinute = 155 * speed;
+    const secondsPerWord = 60 / wordsPerMinute;
+
+    let currentTime = 0;
+    for (const word of words) {
+      const wordDuration = secondsPerWord;
+      wordTimings.push({
+        word: word.replace(/[.,!?;:]$/, ''), // Remove trailing punctuation
+        startTime: currentTime,
+        endTime: currentTime + wordDuration,
+        scriptBlockId: 'unknown', // Will be set later
+      });
+      currentTime += wordDuration;
+    }
+
+    return wordTimings;
+  }
 }
 
 /**
@@ -180,7 +256,7 @@ export class PollyTTSProvider implements TTSProvider {
  */
 export function getTTSProvider(): TTSProvider {
   const ttsProvider = process.env.TTS_PROVIDER || 'mock';
-  
+
   switch (ttsProvider.toLowerCase()) {
     case 'polly':
     case 'aws':
@@ -213,10 +289,10 @@ export function extractWordTimings(
   script: LectureScript
 ): WordTiming[] {
   const wordTimings = ttsResult.wordTimings;
-  
+
   // Build a map of word positions to script blocks
   const scriptWords: Array<{ word: string; blockId: string }> = [];
-  
+
   for (const segment of script.segments) {
     for (const block of segment.scriptBlocks) {
       const words = block.text.split(/\s+/).filter(w => w.length > 0);
@@ -228,17 +304,17 @@ export function extractWordTimings(
       }
     }
   }
-  
+
   // Assign script block IDs to word timings
   const result: WordTiming[] = [];
-  
+
   for (let i = 0; i < wordTimings.length && i < scriptWords.length; i++) {
     result.push({
       ...wordTimings[i],
       scriptBlockId: scriptWords[i].blockId,
     });
   }
-  
+
   // If there are extra timings without matching script words, use the last block ID
   if (wordTimings.length > scriptWords.length && scriptWords.length > 0) {
     const lastBlockId = scriptWords[scriptWords.length - 1].blockId;
@@ -249,7 +325,7 @@ export function extractWordTimings(
       });
     }
   }
-  
+
   return result;
 }
 
@@ -261,11 +337,11 @@ export function validateTimingMonotonicity(wordTimings: WordTiming[]): boolean {
   if (wordTimings.length === 0) {
     return true;
   }
-  
+
   for (let i = 1; i < wordTimings.length; i++) {
     const prev = wordTimings[i - 1];
     const curr = wordTimings[i];
-    
+
     // Current word's start time should be >= previous word's end time
     if (curr.startTime < prev.endTime) {
       logger.warn('Timing monotonicity violation detected', {
@@ -277,7 +353,7 @@ export function validateTimingMonotonicity(wordTimings: WordTiming[]): boolean {
       });
       return false;
     }
-    
+
     // Word's end time should be >= start time
     if (curr.endTime < curr.startTime) {
       logger.warn('Invalid word timing detected', {
@@ -289,7 +365,7 @@ export function validateTimingMonotonicity(wordTimings: WordTiming[]): boolean {
       return false;
     }
   }
-  
+
   return true;
 }
 
@@ -301,26 +377,26 @@ export function fixTimingMonotonicity(wordTimings: WordTiming[]): WordTiming[] {
   if (wordTimings.length === 0) {
     return wordTimings;
   }
-  
+
   const fixed: WordTiming[] = [wordTimings[0]];
-  
+
   for (let i = 1; i < wordTimings.length; i++) {
     const prev = fixed[i - 1];
     const curr = { ...wordTimings[i] };
-    
+
     // Ensure current start time is >= previous end time
     if (curr.startTime < prev.endTime) {
       curr.startTime = prev.endTime;
     }
-    
+
     // Ensure end time is >= start time
     if (curr.endTime < curr.startTime) {
       curr.endTime = curr.startTime + 0.1; // Add small duration
     }
-    
+
     fixed.push(curr);
   }
-  
+
   return fixed;
 }
 
@@ -329,13 +405,13 @@ export function fixTimingMonotonicity(wordTimings: WordTiming[]): WordTiming[] {
  */
 export function concatenateScriptText(script: LectureScript): string {
   const textParts: string[] = [];
-  
+
   for (const segment of script.segments) {
     for (const block of segment.scriptBlocks) {
       textParts.push(block.text);
     }
   }
-  
+
   // Join with spaces and normalize whitespace
   return textParts.join(' ').replace(/\s+/g, ' ').trim();
 }
@@ -347,29 +423,29 @@ export function concatenateScriptText(script: LectureScript): string {
 export async function synthesizeAudio(jobId: string): Promise<AudioOutput> {
   try {
     logger.info('Starting audio synthesis', { jobId });
-    
+
     // Import dynamodb functions here to avoid circular dependencies
     const { getContent, updateContent, getAgent, getJob, updateJob } = require('./dynamodb');
-    
+
     // Retrieve lecture script from database
     const contentRecord = await getContent(jobId);
     if (!contentRecord || !contentRecord.script) {
       throw new Error(`No lecture script found for job: ${jobId}`);
     }
-    
+
     const script = contentRecord.script as LectureScript;
-    
+
     // Retrieve agent configuration
     const job = await getJob(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
     }
-    
+
     let agent = null;
     if (job.agentId) {
       agent = await getAgent(job.agentId);
     }
-    
+
     // If no agent found, use default
     if (!agent) {
       logger.warn('No agent specified, using default agent');
@@ -389,79 +465,119 @@ export async function synthesizeAudio(jobId: string): Promise<AudioOutput> {
         createdAt: new Date(),
       };
     }
-    
-    // Concatenate script blocks into full text
-    const fullText = concatenateScriptText(script);
-    
-    if (fullText.length === 0) {
-      throw new Error('Script text is empty');
-    }
-    
-    logger.info('Script concatenated', {
-      jobId,
-      textLength: fullText.length,
-      wordCount: fullText.split(/\s+/).length,
-    });
-    
+
+    // Instead of concatenating full text, process segment by segment
+    // const fullText = concatenateScriptText(script);
+
     // Get TTS provider
     const ttsProvider = getTTSProvider();
-    
+
     // Map voice configuration
     const voiceConfig = mapVoiceConfiguration(agent);
-    
-    // Generate audio with agent's voice settings
-    const ttsResult = await ttsProvider.synthesize(fullText, voiceConfig);
-    
+
+    let combinedAudioBuffer = Buffer.alloc(0);
+    let combinedWordTimings: WordTiming[] = [];
+    let totalDuration = 0;
+
+    logger.info('Starting segmented synthesis', {
+      jobId,
+      segmentCount: script.segments.length
+    });
+
+    for (const segment of script.segments) {
+      // Concatenate text for this segment only
+      const segmentTextParts: string[] = [];
+      const segmentBlocks: { word: string; blockId: string }[] = [];
+
+      for (const block of segment.scriptBlocks) {
+        segmentTextParts.push(block.text);
+
+        // Map words to block IDs for this segment to help with extraction later if needed
+        // (Though extractWordTimings logic might need adjustment if we do it per segment)
+      }
+      const segmentText = segmentTextParts.join(' ').replace(/\s+/g, ' ').trim();
+
+      if (segmentText.length === 0) continue;
+
+      logger.info('Synthesizing segment', {
+        segmentId: segment.segmentId,
+        textLength: segmentText.length
+      });
+
+      // Synthesize segment
+      const ttsResult = await ttsProvider.synthesize(segmentText, voiceConfig);
+
+      // Extract timings for this segment relative to the start of the SEGMNET's audio
+      // We need to map these timings to the correct ScriptBlock IDs within this segment
+      // We can reuse extractWordTimings but pass a "mini-script" containing only this segment
+      const segmentScript: LectureScript = { ...script, segments: [segment] };
+      const segmentTimings = extractWordTimings(ttsResult, segmentScript);
+
+      // Adjust timings by adding the current total duration
+      const adjustedTimings = segmentTimings.map(t => ({
+        ...t,
+        startTime: t.startTime + totalDuration,
+        endTime: t.endTime + totalDuration,
+      }));
+
+      // Concatenate audio
+      combinedAudioBuffer = Buffer.concat([combinedAudioBuffer, ttsResult.audioBuffer]);
+      combinedWordTimings.push(...adjustedTimings);
+      totalDuration += ttsResult.duration;
+    }
+
+    if (combinedAudioBuffer.length === 0) {
+      throw new Error('Script text yielded no audio');
+    }
+
     logger.info('TTS synthesis completed', {
       jobId,
-      duration: ttsResult.duration,
-      wordCount: ttsResult.wordTimings.length,
+      duration: totalDuration,
+      wordCount: combinedWordTimings.length,
     });
-    
-    // Extract word-level timing data
-    let wordTimings = extractWordTimings(ttsResult, script);
-    
+
     // Validate timing monotonicity
-    const isMonotonic = validateTimingMonotonicity(wordTimings);
+    const isMonotonic = validateTimingMonotonicity(combinedWordTimings);
+    let finalTimings = combinedWordTimings;
     if (!isMonotonic) {
       logger.warn('Timing monotonicity validation failed, fixing timings', { jobId });
-      wordTimings = fixTimingMonotonicity(wordTimings);
+      finalTimings = fixTimingMonotonicity(combinedWordTimings);
     }
-    
+
     // Store MP3 file in S3
-    const audioUrl = await uploadAudio(jobId, ttsResult.audioBuffer);
-    
+    const audioUrl = await uploadAudio(jobId, combinedAudioBuffer);
+
     logger.info('Audio uploaded to S3', { jobId, audioUrl });
-    
+
     // Create audio output
     const audioOutput: AudioOutput = {
       audioUrl,
-      duration: ttsResult.duration,
-      wordTimings,
+      duration: totalDuration,
+      wordTimings: finalTimings,
     };
-    
+
     // Store audio metadata and timings in database
     await updateContent(jobId, {
       audioUrl,
-      wordTimings,
+      wordTimings: finalTimings,
     });
-    
+
     // Update job status to completed
     await updateJob(jobId, {
       status: 'completed',
     });
-    
+
     logger.info('Audio synthesis completed', {
       jobId,
       audioUrl,
-      duration: ttsResult.duration,
-      wordTimingCount: wordTimings.length,
+      duration: totalDuration,
+      wordTimingCount: finalTimings.length,
     });
-    
+
     return audioOutput;
   } catch (error) {
     logger.error('Audio synthesis failed', { jobId, error });
-    
+
     // Update job status to failed
     try {
       const { updateJob } = require('./dynamodb');
@@ -472,7 +588,7 @@ export async function synthesizeAudio(jobId: string): Promise<AudioOutput> {
     } catch (updateError) {
       logger.error('Failed to update job status', { jobId, error: updateError });
     }
-    
+
     throw error;
   }
 }

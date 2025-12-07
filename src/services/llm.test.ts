@@ -58,6 +58,15 @@ describe('LLM Service', () => {
   });
 
   describe('Model Recommendations', () => {
+    beforeEach(() => {
+      // Clear environment variable overrides for these tests
+      delete process.env.LLM_MODEL_ANALYSIS;
+      delete process.env.LLM_MODEL_VISION;
+      delete process.env.LLM_MODEL_SEGMENTATION;
+      delete process.env.LLM_MODEL_SCRIPT;
+      delete process.env.LLM_MODEL_FAST;
+    });
+
     it('should return correct model for analysis task', () => {
       const model = getRecommendedModel('analysis', 'openrouter');
       expect(model).toBe('openai/gpt-4-turbo-preview');
@@ -85,6 +94,15 @@ describe('LLM Service', () => {
   });
 
   describe('Model Recommendations by Provider', () => {
+    beforeEach(() => {
+      // Clear environment variable overrides for these tests
+      delete process.env.LLM_MODEL_ANALYSIS;
+      delete process.env.LLM_MODEL_VISION;
+      delete process.env.LLM_MODEL_SEGMENTATION;
+      delete process.env.LLM_MODEL_SCRIPT;
+      delete process.env.LLM_MODEL_FAST;
+    });
+
     it('should return OpenAI models when provider is openai', () => {
       const model = getRecommendedModel('analysis', 'openai');
       expect(model).toBe('gpt-4-turbo-preview');

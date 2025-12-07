@@ -22,10 +22,21 @@ import { downloadPDF } from './s3';
 import { llmService, getRecommendedModel } from './llm';
 import { recordLLMCallMetrics } from '../utils/llm-metrics';
 
+// Polyfill DOMMatrix for pdf-parse (required in Lambda environment)
+// Must be loaded BEFORE pdf-parse
+if (typeof global.DOMMatrix === 'undefined') {
+  try {
+    const { DOMMatrix } = require('@thednp/dommatrix');
+    global.DOMMatrix = DOMMatrix;
+  } catch (error) {
+    logger.warn('Failed to load DOMMatrix polyfill', { error });
+  }
+}
+
 // Dynamic imports for modules with ESM/CJS issues
 const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
-const { convert } = require('pdf-img-convert');
+// const { convert } = require('pdf-img-convert'); // Removed - using pdf2img-lambda-friendly in vision-first pipeline
 
 /**
  * Extract text content from all pages of a PDF
@@ -39,12 +50,30 @@ export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<PageContent
     // pdf-parse gives us the full text, but we need to split by pages
     // For now, we'll create a simple page structure
     // In a production system, we'd use a more sophisticated library like pdf.js
-    const totalPages = data.numpages;
+    let totalPages = data.numpages;
     const fullText = data.text;
+    
+    // Handle case where pdf-parse reports 0 pages but we have text
+    // This can happen with certain PDF formats
+    if (totalPages === 0 && fullText.length > 0) {
+      logger.warn('PDF reports 0 pages but has text content, estimating page count', {
+        textLength: fullText.length,
+      });
+      // Estimate pages based on typical page length (~3000 chars per page)
+      totalPages = Math.max(1, Math.ceil(fullText.length / 3000));
+      logger.info('Estimated page count', { estimatedPages: totalPages });
+    }
     
     // Simple heuristic: split text roughly equally across pages
     // This is a simplification - real implementation would need proper page detection
     const pages: PageContent[] = [];
+    
+    if (totalPages === 0) {
+      // No pages and no text - return empty array
+      logger.warn('PDF has no pages and no text content');
+      return pages;
+    }
+    
     const textPerPage = Math.ceil(fullText.length / totalPages);
     
     for (let i = 0; i < totalPages; i++) {
@@ -147,30 +176,8 @@ async function extractImageFromPDF(
   }
   
   try {
-    logger.info('Extracting image from PDF', { pageNumber });
-    
-    // Convert specific page to image
-    // pdf-img-convert uses page_numbers starting from 1
-    const images = await convert(pdfBuffer, {
-      page_numbers: [pageNumber],
-      base64: true,
-      width: 2000, // High resolution for vision models
-      height: 2000,
-    });
-    
-    if (!images || images.length === 0) {
-      throw new Error('No image extracted from PDF page');
-    }
-    
-    // Format as data URL
-    const imageData = `data:image/png;base64,${images[0]}`;
-    
-    logger.info('Image extracted successfully', {
-      pageNumber,
-      imageSize: imageData.length,
-    });
-    
-    return imageData;
+    logger.error('Legacy analyzer image extraction not supported - use vision-first pipeline', { pageNumber });
+    throw new Error('Legacy analyzer is deprecated. Enable ENABLE_VISION_FIRST_PIPELINE=true to use vision-first analyzer.');
   } catch (error) {
     logger.error('Image extraction failed', { pageNumber, error });
     throw new Error(`Failed to extract image from page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);

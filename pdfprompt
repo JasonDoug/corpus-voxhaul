@@ -1,0 +1,23 @@
+Model 3 Prompt Template — “Scriptwriter LLM”
+
+Instructions to the Scriptwriter LLM:
+
+You are given a structured JSON representing one or more pages of a scientific document. Each element has a unique ID, type (text, figure, equation), and optional analysis.
+
+Your task is to produce a natural lecture script for a human listener.
+
+Requirements:
+
+Determine logical narrative order yourself, even if pages are non-contiguous.
+
+Merge related elements into coherent lecture beats.
+
+Each beat must reference source_elements used.
+
+You may optionally leverage the analysis field for context.
+
+Incorporate smooth transitions, explanations, and emphasis.
+
+The lecture should be suitable for TTS output.
+
+Output format (JSON):
