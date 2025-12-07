@@ -12,6 +12,7 @@ dist/
 .env.local
 .env.production
 .env.*.local
+.env.antigravity
 
 # AWS credentials (should never be committed)
 .aws/
