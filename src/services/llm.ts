@@ -38,6 +38,7 @@ export interface VisionRequest {
   imageUrl: string;
   prompt: string;
   model?: string;
+  maxTokens?: number;
 }
 
 /**
@@ -250,7 +251,7 @@ class OpenRouterClient {
               ],
             },
           ],
-          max_tokens: 1024,
+          max_tokens: request.maxTokens ?? 4096,
         }),
       });
       

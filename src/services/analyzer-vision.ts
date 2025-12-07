@@ -11,6 +11,7 @@
 // - Natural segmentation: Based on visual page structure
 
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 import { SegmentedContent, ContentSegment } from '../models/content';
 import { llmService } from './llm';
 import { recordLLMCallMetrics } from '../utils/llm-metrics';
@@ -164,6 +165,7 @@ IMPORTANT:
       imageUrl: pageImage,
       prompt,
       model,
+      maxTokens: config.vision.maxTokens,
     });
     
     const duration = Date.now() - startTime;

@@ -4,6 +4,9 @@ import { LectureAgent, PersonalityConfig, VoiceConfig } from '../models/agent';
 import * as db from './dynamodb';
 import { logger } from '../utils/logger';
 
+export type AgentCreate = Omit<LectureAgent, 'id' | 'createdAt'>;
+export type AgentUpdate = Partial<Omit<LectureAgent, 'id' | 'createdAt'>>;
+
 // Validation error class
 export class AgentValidationError extends Error {
   constructor(message: string) {
@@ -38,20 +41,20 @@ function validatePersonality(personality: PersonalityConfig): void {
   if (!personality || typeof personality !== 'object') {
     throw new AgentValidationError('Personality configuration is required');
   }
-  
+
   if (!personality.instructions || typeof personality.instructions !== 'string') {
     throw new AgentValidationError('Personality instructions are required and must be a string');
   }
-  
+
   if (personality.instructions.trim().length === 0) {
     throw new AgentValidationError('Personality instructions cannot be empty');
   }
-  
+
   const validTones = ['humorous', 'serious', 'casual', 'formal', 'enthusiastic'];
   if (!validTones.includes(personality.tone)) {
     throw new AgentValidationError(`Personality tone must be one of: ${validTones.join(', ')}`);
   }
-  
+
   if (personality.examples !== undefined) {
     if (!Array.isArray(personality.examples)) {
       throw new AgentValidationError('Personality examples must be an array');
@@ -66,23 +69,23 @@ function validateVoice(voice: VoiceConfig): void {
   if (!voice || typeof voice !== 'object') {
     throw new AgentValidationError('Voice configuration is required');
   }
-  
+
   if (!voice.voiceId || typeof voice.voiceId !== 'string') {
     throw new AgentValidationError('Voice ID is required and must be a string');
   }
-  
+
   if (typeof voice.speed !== 'number') {
     throw new AgentValidationError('Voice speed must be a number');
   }
-  
+
   if (voice.speed < 0.5 || voice.speed > 2.0) {
     throw new AgentValidationError('Voice speed must be between 0.5 and 2.0');
   }
-  
+
   if (typeof voice.pitch !== 'number') {
     throw new AgentValidationError('Voice pitch must be a number');
   }
-  
+
   if (voice.pitch < -20 || voice.pitch > 20) {
     throw new AgentValidationError('Voice pitch must be between -20 and 20');
   }
@@ -102,14 +105,14 @@ export async function createAgent(
 ): Promise<LectureAgent> {
   // Validate input
   validateAgent(agentData);
-  
+
   // Create agent with generated ID and timestamp
   const agent: LectureAgent = {
     ...agentData,
     id: uuidv4(),
     createdAt: new Date(),
   };
-  
+
   try {
     // Use database layer to create agent (includes unique name check)
     const created = await db.createAgent(agent);
@@ -127,7 +130,7 @@ export async function getAgent(id: string): Promise<LectureAgent | null> {
   if (!id || typeof id !== 'string') {
     throw new AgentValidationError('Agent ID is required and must be a string');
   }
-  
+
   return await db.getAgent(id);
 }
 
@@ -142,24 +145,24 @@ export async function updateAgent(
   if (!id || typeof id !== 'string') {
     throw new AgentValidationError('Agent ID is required and must be a string');
   }
-  
+
   // Validate individual fields if provided
   if (updates.name !== undefined) {
     validateName(updates.name);
   }
-  
+
   if (updates.description !== undefined) {
     validateDescription(updates.description);
   }
-  
+
   if (updates.personality !== undefined) {
     validatePersonality(updates.personality);
   }
-  
+
   if (updates.voice !== undefined) {
     validateVoice(updates.voice);
   }
-  
+
   try {
     const updated = await db.updateAgent(id, updates);
     logger.info('Agent updated successfully', { agentId: id });
@@ -179,7 +182,7 @@ export async function deleteAgent(id: string): Promise<void> {
   if (!id || typeof id !== 'string') {
     throw new AgentValidationError('Agent ID is required and must be a string');
   }
-  
+
   await db.deleteAgent(id);
   logger.info('Agent deleted successfully', { agentId: id });
 }

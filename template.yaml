@@ -29,6 +29,8 @@ Globals:
         ENABLE_REAL_SEGMENTATION: 'false'
         VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
         LLM_MODEL_SCRIPT: 'tngtech/deepseek-r1t2-chimera:free'
+        TTS_PROVIDER: 'polly'
+        POLLY_ENGINE: 'generative'
 
 
 Parameters:
@@ -327,6 +329,11 @@ Resources:
             TableName: !Ref AgentsTable
         - EventBridgePutEventsPolicy:
             EventBusName: !Ref EventBus
+        - Statement:
+            - Effect: Allow
+              Action:
+                - polly:SynthesizeSpeech
+              Resource: '*'
       Events:
         AudioEvent:
           Type: EventBridgeRule
@@ -371,6 +378,41 @@ Resources:
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /status/{jobId}
+            Method: GET
+
+  PlaybackFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/functions/status.ts
+        External:
+          - canvas
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/status.playbackHandler
+      Description: API endpoint for retrieving lecture playback data
+      Timeout: 30
+      MemorySize: 1024
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ContentTable
+        - S3ReadPolicy:
+            BucketName: !Ref PDFBucket
+        - S3ReadPolicy:
+            BucketName: !Ref AudioBucket
+      Events:
+        PlaybackApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /playback/{jobId}
             Method: GET
 
   AgentsFunction:

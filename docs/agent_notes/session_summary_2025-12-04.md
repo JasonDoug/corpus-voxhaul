@@ -1,25 +1,20 @@
-# Session Summary: Vision First Pipeline Integration - Part 2
+# Session Summary: Vision First Pipeline Integration - Part 3
 
-This session built upon the previous work to finalize the debugging and activation of the "Vision First" PDF processing pipeline in Corpus-Vox. The focus was on resolving downstream failures in the Script and Audio generation stages that were uncovered after the initial Vision Analysis fix.
+This session focused on resolving the remaining downstream failures in the `ScriptFunction` and `AudioFunction` to complete the end-to-end Vision First pipeline.
 
 **Key Achievements:**
 
--   **Full End-to-End Success:** Achieved a completely successful run of the pipeline from PDF upload to final audio generation (`jobId: e4b67b1f-b5e6-4d6f-95be-8cf42f350645`).
--   **Event Parsing Fixed:** Identified and fixed a critical bug in `ScriptFunction` and `AudioFunction` where `jobId` was being incorrectly parsed from EventBridge events (`event.jobId` vs `event.detail.jobId`). This prevented downstream functions from retrieving job context.
--   **IAM Permissions Resolved:**
-    -   Fixed `AudioFunction` failure by adding `DynamoDBReadPolicy` for the `AgentsTable`, allowing it to retrieve voice configurations.
-    -   Fixed `AudioFunction` failure by adding `EventBridgePutEventsPolicy`, allowing it to emit the final `JobCompleted` event.
--   **Model Configuration Corrected:** Updated `template.yaml` to explicitly set `LLM_MODEL_SCRIPT` to a free-tier model (`tngtech/deepseek-r1t2-chimera:free`) to avoid `402 Payment Required` errors caused by falling back to the default paid model.
--   **Error Handling Enhanced:** Implemented robust error logging in `AnalyzerFunction`, `ScriptFunction`, and `AudioFunction`. The new logging explicitly serializes error objects, revealing previously hidden error details (like empty `{}` logs).
--   **Rate Limit Optimization:** Confirmed that the sequential processing logic for Vision Analysis effectively mitigates rate limits on free-tier models.
+-   **Script Generation Verified:** The `ScriptFunction` is now successfully generating scripts from the segmented content produced by the Vision LLM. A full run for a single-page PDF (`080eed5a...`) successfully generated scripts for 4 segments.
+-   **Event Parsing & Error Handling:** Fixed critical bugs in `ScriptFunction` and `AudioFunction` related to `jobId` parsing from EventBridge events and error object serialization. This revealed the root causes of previous "silent" failures.
+-   **Polly Permissions & Credentials:**
+    -   Resolved "Invalid Security Token" error in `AudioFunction` by removing manual credential assignment in `audio-synthesizer.ts`, allowing the AWS SDK to correctly use the Lambda's temporary credentials (including session token).
+    -   Fixed "Invalid Policy" deployment error by using explicit IAM `Statement` for `polly:SynthesizeSpeech` instead of an invalid shorthand.
+    -   Fixed Polly "Voice ID" validation error by updating the Agent's voice ID in DynamoDB to a valid generative voice (`Joanna`).
+-   **Audio Synthesis Started:** The `AudioFunction` is now successfully triggered and attempting to synthesize audio.
 
-**Previous State (Start of Session):**
--   The pipeline successfully reached the `analyzing` stage but stalled or failed silently during `script_generation`.
--   `ScriptFunction` was failing immediately due to `jobId` parsing errors.
--   `AudioFunction` had missing permissions and logic gaps.
--   Paid models were being inadvertently used, causing billing errors.
+**Current Status & Blocker:**
+-   The pipeline runs successfully up to the start of Audio Synthesis.
+-   **Blocker:** The `AudioFunction` is failing with `"TTS synthesis failed: Maximum text length has been exceeded"`. This is because the current implementation concatenates the entire script (which can be very long even for a single page) into one request, exceeding Polly's synchronous limit of ~3000 characters.
 
-**Current State:**
--   The pipeline is **fully operational**.
--   PDFs are uploaded, converted to images, analyzed by Vision LLM, turned into scripts by LLM, and synthesized into audio by Polly.
--   The final job status is correctly marked as `completed`, and the `audioUrl` is available in the content record.
+**Next Immediate Task:**
+-   Refactor `synthesizeAudio` in `src/services/audio-synthesizer.ts` to synthesize audio **per segment** (or chunk) instead of monolithically, and then concatenate the results. This will respect Polly's limits and align with the segmented architecture.
