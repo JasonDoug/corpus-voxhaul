@@ -4,7 +4,7 @@ Description: PDF Lecture Service - Serverless application for converting scienti
 
 Globals:
   Function:
-    Runtime: nodejs18.x
+    Runtime: nodejs20.x
     MemorySize: 1024
     Timeout: 300
     Environment:
@@ -566,11 +566,7 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${AnalyzerFunction}'
       RetentionInDays: 30
 
-  SegmenterFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${SegmenterFunction}'
-      RetentionInDays: 30
+
 
   ScriptFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -619,16 +615,7 @@ Resources:
           MetricValue: '1'
           DefaultValue: 0
 
-  SegmenterErrorMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref SegmenterFunctionLogGroup
-      FilterPattern: '{ $.level = "ERROR" }'
-      MetricTransformations:
-        - MetricName: SegmenterErrors
-          MetricNamespace: PDFLectureService
-          MetricValue: '1'
-          DefaultValue: 0
+
 
   ScriptErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
