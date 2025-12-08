@@ -87,7 +87,7 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
       Auth:
-        ApiKeyRequired: true
+        ApiKeyRequired: false
 
   # Lambda Functions
   UploadFunction:
@@ -100,8 +100,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/upload.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/upload.uploadHandler
@@ -128,6 +126,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /upload
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   # PDF Processing Layer (pypdfium2)
   PdfLayer:
@@ -215,47 +215,10 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /analyze/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
-  SegmenterFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/segmenter.ts
-        External:
-          - canvas
-    Properties:
-      CodeUri: ./
-      Handler: src/functions/segmenter.segmenterHandler
-      Description: Segments content into logical topics
-      Timeout: 300
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ContentTable
-        - EventBridgePutEventsPolicy:
-            EventBusName: !Ref EventBus
-      Events:
-        SegmentEvent:
-          Type: EventBridgeRule
-          Properties:
-            EventBusName: !Ref EventBus
-            Pattern:
-              source:
-                - pdf-lecture-service
-              detail-type:
-                - AnalysisCompleted
-        SegmentApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /segment/{jobId}
-            Method: POST
+
 
   ScriptFunction:
     Type: AWS::Serverless::Function
@@ -267,8 +230,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/script.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/script.scriptHandler
@@ -299,6 +260,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /script/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   AudioFunction:
     Type: AWS::Serverless::Function
@@ -310,8 +273,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/audio.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/audio.audioHandler
@@ -350,6 +311,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /audio/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   StatusFunction:
     Type: AWS::Serverless::Function
@@ -361,8 +324,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/status.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/status.statusHandler
@@ -379,6 +340,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /status/{jobId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   PlaybackFunction:
     Type: AWS::Serverless::Function
@@ -390,8 +353,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/status.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/status.playbackHandler
@@ -414,6 +375,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /playback/{jobId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   AgentsFunction:
     Type: AWS::Serverless::Function
@@ -425,8 +388,6 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - src/functions/agents.ts
-        External:
-          - canvas
     Properties:
       CodeUri: ./
       Handler: src/functions/agents.agentsHandler
@@ -452,30 +413,40 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /agents
             Method: GET
+            Auth:
+              ApiKeyRequired: true
         CreateAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents
             Method: POST
+            Auth:
+              ApiKeyRequired: true
         GetAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
         UpdateAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: PUT
+            Auth:
+              ApiKeyRequired: true
         DeleteAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: DELETE
+            Auth:
+              ApiKeyRequired: true
 
   # DynamoDB Tables
   JobsTable:

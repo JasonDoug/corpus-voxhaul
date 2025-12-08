@@ -18,14 +18,14 @@ export async function uploadHandler(event: any): Promise<any> {
   const correlationId = event.requestContext?.requestId || randomUUID();
   logger.setCorrelationId(correlationId);
   logger.setFunctionName('UploadFunction');
-  
+
   // Start timing the request
   const timerId = metrics.startTimer('UploadFunctionDuration', { function: 'upload' });
-  
+
   try {
     logger.info('Upload function invoked', { correlationId });
     requestMetrics.incrementRequest('upload');
-    
+
     // Parse the request body from API Gateway
     let body: any;
     if (typeof event.body === 'string') {
@@ -33,7 +33,7 @@ export async function uploadHandler(event: any): Promise<any> {
     } else {
       body = event.body || event;
     }
-    
+
     // Convert base64 file to Buffer if needed
     let fileBuffer: Buffer;
     if (typeof body.file === 'string') {
@@ -43,39 +43,43 @@ export async function uploadHandler(event: any): Promise<any> {
     } else {
       throw new Error('Invalid file format - must be base64 string or Buffer');
     }
-    
+
     const request: UploadRequest = {
       file: fileBuffer,
       filename: body.filename,
       agentId: body.agentId,
     };
-    
+
     // Track file size
     if (request.file) {
       metrics.recordSize('UploadFileSize', request.file.length, { function: 'upload' });
     }
-    
+
     // Handle the upload
     const response: UploadResponse = await handleUpload(request);
-    
+
     logger.info('Upload completed successfully', { jobId: response.jobId, correlationId });
     requestMetrics.incrementSuccess('upload');
     metrics.stopTimer(timerId);
-    
+
     return {
       statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify(response),
     };
   } catch (error) {
     logger.error('Upload handler error', { error, correlationId });
-    
+
     const errorType = (error as any).code || 'UnknownError';
     requestMetrics.incrementError('upload', errorType);
     metrics.recordCount('UploadError', 1, { function: 'upload', errorType });
     metrics.stopTimer(timerId);
-    
+
     const errorResponse: ErrorResponse = generateErrorResponse(error as any);
-    
+
     // Determine HTTP status code based on error type
     let statusCode = 500;
     if ('code' in (error as any)) {
@@ -84,9 +88,13 @@ export async function uploadHandler(event: any): Promise<any> {
         statusCode = 400; // Bad Request
       }
     }
-    
+
     return {
       statusCode,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify(errorResponse),
     };
   }
