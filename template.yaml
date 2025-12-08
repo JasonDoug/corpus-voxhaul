@@ -92,17 +92,9 @@ Resources:
   # Lambda Functions
   UploadFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/upload.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/upload.uploadHandler
+      CodeUri: dist/functions/
+      Handler: upload.uploadHandler
       Description: Accepts PDF uploads and initiates processing pipeline
       Timeout: 60
       Policies:
@@ -151,6 +143,7 @@ Resources:
       MemorySize: 2048
       Layers:
         - !Ref PdfLayer
+
       Environment:
         Variables:
           S3_BUCKET_PDFS: !Ref PDFBucket
@@ -175,17 +168,9 @@ Resources:
 
   AnalyzerFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/analyzer.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/analyzer.analyzerHandler
+      CodeUri: dist/functions/
+      Handler: analyzer.analyzerHandler
       Description: Analyzes PDF content and extracts all elements (Vision First Enabled - v2)
       Timeout: 300
       MemorySize: 2048
@@ -222,17 +207,9 @@ Resources:
 
   ScriptFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/script.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/script.scriptHandler
+      CodeUri: dist/functions/
+      Handler: script.scriptHandler
       Description: Generates lecture script with personality
       Timeout: 300
       Policies:
@@ -265,17 +242,9 @@ Resources:
 
   AudioFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/audio.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/audio.audioHandler
+      CodeUri: dist/functions/
+      Handler: audio.audioHandler
       Description: Synthesizes audio from lecture script
       Timeout: 600
       MemorySize: 2048
@@ -316,17 +285,9 @@ Resources:
 
   StatusFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/status.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/status.statusHandler
+      CodeUri: dist/functions/
+      Handler: status.statusHandler
       Description: Queries job status
       Timeout: 30
       MemorySize: 1024
@@ -345,17 +306,9 @@ Resources:
 
   PlaybackFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/status.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/status.playbackHandler
+      CodeUri: dist/functions/
+      Handler: status.playbackHandler
       Description: API endpoint for retrieving lecture playback data
       Timeout: 30
       MemorySize: 1024
@@ -380,17 +333,9 @@ Resources:
 
   AgentsFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/agents.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/agents.agentsHandler
+      CodeUri: dist/functions/
+      Handler: agents.agentsHandler
       Description: Manages lecture agents (CRUD operations)
       Timeout: 30
       MemorySize: 1024

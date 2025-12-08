@@ -76,10 +76,7 @@ if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
     read -p "Enter Anthropic API Key (or press Enter to skip): " ANTHROPIC_API_KEY
 fi
 
-if [ -z "$TTS_API_KEY" ]; then
-    echo -e "${YELLOW}⚠ TTS_API_KEY not set${NC}"
-    read -p "Enter TTS API Key (or press Enter to skip): " TTS_API_KEY
-fi
+
 
 # Set LLM provider
 if [ -n "$OPENROUTER_API_KEY" ]; then
@@ -143,7 +140,6 @@ sam deploy \
      OpenRouterApiKey=$OPENROUTER_API_KEY \
      OpenAIApiKey=$OPENAI_API_KEY \
      AnthropicApiKey=$ANTHROPIC_API_KEY \
-     TTSApiKey=$TTS_API_KEY \
      LLMProvider=$LLM_PROVIDER" \
   --no-fail-on-empty-changeset
 
