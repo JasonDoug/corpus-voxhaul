@@ -1,0 +1,117 @@
+
+export AWS_PROFILE=admin         # or whatever profile you want
+
+
+Get Lambda Names
+aws lambda list-functions --query "Functions[*].FunctionName" --output text
+
+pdf-lecture-service-AnalyzerFunction-WNQyG4ZdZZF5
+pdf-lecture-service-UploadFunction-f1EN4kRje8U5
+pdf-lecture-service-PdfToImagesFunction-P0PzU1SQujhH
+pdf-lecture-service-SegmenterFunction-sPSIcFq12tHO
+pdf-lecture-service-StatusFunction-aXfVCv8MVSeb
+pdf-lecture-service-ScriptFunction-Y2WH8O7G1aOD
+pdf-lecture-service-AgentsFunction-PJMGugZYNnkn
+pdf-lecture-service-PlaybackFunction-sMFsMC5CkffC
+pdf-lecture-service-AudioFunction-XhEMVtD7LTkX
+
+Get ARNs from Lamdas
+for fn in \
+pdf-lecture-service-AnalyzerFunction-WNQyG4ZdZZF5 \
+pdf-lecture-service-UploadFunction-f1EN4kRje8U5 \
+pdf-lecture-service-PdfToImagesFunction-P0PzU1SQujhH \
+pdf-lecture-service-SegmenterFunction-sPSIcFq12tHO \
+pdf-lecture-service-StatusFunction-aXfVCv8MVSeb \
+pdf-lecture-service-ScriptFunction-Y2WH8O7G1aOD \
+pdf-lecture-service-AgentsFunction-PJMGugZYNnkn \
+pdf-lecture-service-PlaybackFunction-sMFsMC5CkffC \
+pdf-lecture-service-AudioFunction-XhEMVtD7LTkX
+do
+  echo "$fn:"
+  aws lambda get-function --function-name "$fn" --region $AWS_REGION --profile $AWS_PROFILE --query 'Configuration.Role' --output text
+done
+
+Lamda names and ARN
+pdf-lecture-service-AnalyzerFunction-WNQyG4ZdZZF5:
+arn:aws:iam::456522530654:role/pdf-lecture-service-AnalyzerFunctionRole-zyoOa9gwpOvI
+
+pdf-lecture-service-UploadFunction-f1EN4kRje8U5:
+arn:aws:iam::456522530654:role/pdf-lecture-service-UploadFunctionRole-4kvuL7abPos1
+
+pdf-lecture-service-PdfToImagesFunction-P0PzU1SQujhH:
+arn:aws:iam::456522530654:role/pdf-lecture-service-PdfToImagesFunctionRole-De4vAj4RCJSd
+
+pdf-lecture-service-SegmenterFunction-sPSIcFq12tHO:
+arn:aws:iam::456522530654:role/pdf-lecture-service-SegmenterFunctionRole-ixI1OeEyWhge
+
+pdf-lecture-service-StatusFunction-aXfVCv8MVSeb:
+arn:aws:iam::456522530654:role/pdf-lecture-service-StatusFunctionRole-fpDksJh92xYU
+
+pdf-lecture-service-ScriptFunction-Y2WH8O7G1aOD:
+arn:aws:iam::456522530654:role/pdf-lecture-service-ScriptFunctionRole-Nbg8GntJwfxy
+
+pdf-lecture-service-AgentsFunction-PJMGugZYNnkn:
+arn:aws:iam::456522530654:role/pdf-lecture-service-AgentsFunctionRole-6cPze8XKErHn
+
+pdf-lecture-service-PlaybackFunction-sMFsMC5CkffC:
+arn:aws:iam::456522530654:role/pdf-lecture-service-PlaybackFunctionRole-rJVyAhOTMd8x
+
+pdf-lecture-service-AudioFunction-XhEMVtD7LTkX:
+arn:aws:iam::456522530654:role/pdf-lecture-service-AudioFunctionRole-zQEkrsgzf5iK
+
+
+S3 Buckets:
+pdf-lecture-service-audio-456522530654
+pdf-lecture-service-frontend-456522530654
+pdf-lecture-service-pdfs-456522530654
+
+
+API Gateway
+---------------------------------------
+|             GetRestApis             |
++-------------+-----------------------+
+|  vtqny8cp7e |  pdf-lecture-service  |
++-------------+-----------------------+
+
+resource "aws_api_gateway_rest_api" "pdf_lecture_service_api" {
+  name        = "pdf-lecture-service-api"
+  description = "API for PDF Lecture Service"
+
+}
+
+
+
+IAM User Groups:
+pdf_admins
+pdf_workers
+adminaccess
+
+
+IAM Users:
+cli-admin
+pdf_admin
+pdf_worker
+
+
+
+# Groups
+resource "aws_iam_group" "pdf_admins" { name = "pdf_admins" }
+resource "aws_iam_group" "pdf_workers" { name = "pdf_workers" }
+resource "aws_iam_group" "adminaccess" { name = "adminaccess" }
+
+# Users
+resource "aws_iam_user" "cli_admin" { name = "cli-admin" }
+resource "aws_iam_user" "pdf_admin" { name = "pdf_admin" }
+resource "aws_iam_user" "pdf_worker" { name = "pdf_worker" }
+
+
+
+
+
+
+
+
+DynamoDB Tables:
+pdf-lecture-service-agents
+pdf-lecture-service-content
+pdf-lecture-service-jobs

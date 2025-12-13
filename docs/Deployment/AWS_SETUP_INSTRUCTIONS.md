@@ -231,7 +231,7 @@ node scripts/e2e-test.js
 
 ## Deployment Commands
 
-### Quick Deployment (Recommended)
+### Quick Deployment
 
 ```bash
 # Deploy to development
@@ -241,29 +241,34 @@ bash scripts/quick-deploy.sh dev
 bash scripts/quick-deploy.sh prod
 ```
 
-### Manual Deployment
+**Note:** The quick-deploy script may not always trigger a full rebuild of Lambda artifacts. If you make code changes and the deployment seems to use cached artifacts, use the manual deployment method below.
+
+### Manual Deployment (Recommended for Code Changes)
 
 ```bash
-# 1. Build
+# 1. Build TypeScript and bundle
 npm run build
 npm run bundle
 
-# 2. SAM build
+# 2. SAM build (rebuilds Lambda artifacts)
 sam build
 
 # 3. Deploy to dev
+export AWS_PROFILE=admin
+sam deploy --config-env default --no-confirm-changeset
+
+# Or deploy to prod
+sam deploy --config-env prod --no-confirm-changeset
+```
+
+**Alternative:** With parameter overrides:
+
+```bash
 sam deploy \
   --config-env default \
+  --no-confirm-changeset \
   --parameter-overrides \
     "Stage=dev \
-     OpenRouterApiKey=$OPENROUTER_API_KEY \
-     LLMProvider=openrouter"
-
-# 4. Deploy to prod
-sam deploy \
-  --config-env prod \
-  --parameter-overrides \
-    "Stage=prod \
      OpenRouterApiKey=$OPENROUTER_API_KEY \
      LLMProvider=openrouter"
 ```

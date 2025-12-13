@@ -56,8 +56,10 @@ export async function analyzerHandler(event: any): Promise<any> {
     }
 
     // Store segmented content directly (skip separate segmentation step)
+    // Also store as originalSegmentedContent to preserve the vision output before script generation
     await updateContent(jobId, {
       segmentedContent,
+      originalSegmentedContent: segmentedContent,
     });
 
     // Update job status to 'generating_script' (skip segmentation stage)

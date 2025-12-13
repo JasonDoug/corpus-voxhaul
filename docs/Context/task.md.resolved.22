@@ -1,0 +1,60 @@
+# Production Hardening & Optimization Tasks
+
+- [ ] **Infrastructure Upgrades** <!-- id: 0 -->
+    - [ ] Upgrade to AWS SDK v3 <!-- id: 1 -->
+    - [ ] Update Runtime to Node.js 20.x <!-- id: 2 -->
+    - [ ] Update [template.yaml](file:///home/jason/Projects/Corpus-Vox/template.yaml) and [package.json](file:///home/jason/Projects/Corpus-Vox/package.json)
+
+- [ ] **Observability & Cost Tracking**
+    - [ ] Structured JSON Logging <!-- id: 6 -->
+        - [ ] Update [src/utils/logger.ts](file:///home/jason/Projects/Corpus-Vox/src/utils/logger.ts)
+    - [ ] LLM Cost Calculation <!-- id: 7 -->
+        - [ ] Create [src/utils/llm-cost.ts](file:///home/jason/Projects/Corpus-Vox/src/utils/llm-cost.ts)
+        - [ ] Update `JobsTable` schema
+    - [ ] CloudWatch Dashboard
+        - [ ] Define metrics in [template.yaml](file:///home/jason/Projects/Corpus-Vox/template.yaml)
+
+- [x] **Debugging & Connectivity**
+    - [x] ~~Fix "Failed to load agents" (CORS 403 on OPTIONS)~~ <!-- id: 4 -->
+    - [ ] Fix "Network Error" on PDF Upload (CORS success/error headers) <!-- id: 5 -->
+        - [ ] Patch [src/functions/upload.ts](file:///home/jason/Projects/Corpus-Vox/src/functions/upload.ts) (Cancelled by user)
+        - [ ] Deploy fix to AWS (Cancelled)ing** <!-- id: 4 -->
+        - [ ] Measure processing time per stage
+
+- [ ] **Performance & Scalability**
+    - [ ] **Concurrent Processing** <!-- id: 3 -->
+        - [ ] Establish performance baselines
+    - [ ] **Rate Limiting Review** <!-- id: 5 -->
+        - [ ] Review OpenRouter limits
+        - [ ] Document strategy
+
+- [ ] **Comprehensive Testing**
+    - [ ] **Error Handling** <!-- id: 6 -->
+        - [ ] Test Corrupted PDF
+        - [ ] Test Oversized PDF
+        - [ ] Test Non-PDF file
+        - [ ] Test Empty PDF
+        - [ ] Test Image-only PDF
+        - [ ] Test Non-English PDF
+    - [ ] **Agent Testing** <!-- id: 7 -->
+        - [ ] CRUD operations
+        - [ ] Agent persistence (does it stay selected?)
+        - [ ] Invalid configuration handling
+        - [ ] Personality differences in script
+    - [ ] **Content Complexity** <!-- id: 8 -->
+        - [ ] Short vs Long papers
+        - [ ] Figure/Formula heavy
+        - [ ] Table/Citation heavy
+
+- [ ] **Feature Enhancements**
+    - [ ] **Player Optimization** <!-- id: 9 -->
+        - [ ] Display Original PDF
+        - [ ] Segment Navigation (Click segment -> Jump to audio)
+        - [ ] Immersive Reader Sync (Highlighting)
+        - [ ] Playback Accuracy (Timings)
+    - [ ] **Pipeline Optimization** <!-- id: 13 -->
+        - [ ] Investigate/Fix excessive segmentation (1 sentence segments)
+    - [ ] **Admin Configuration** <!-- id: 10 -->
+        - [ ] Identify all [.env](file:///home/jason/Projects/Corpus-Vox/.env) settings
+        - [ ] Create Admin Page to manage them
+

@@ -37,34 +37,34 @@ interface PageAnalysis {
 async function extractPagesAsImages(jobId: string): Promise<string[]> {
   try {
     logger.info('Loading page images from S3', { jobId });
-    
+
     const AWS = require('aws-sdk');
     const s3 = new AWS.S3();
-    
+
     const bucket = process.env.S3_BUCKET_PDFS;
     const prefix = `${jobId}_pages/`;
-    
+
     // List all page images for this job
     const listResponse = await s3.listObjectsV2({
       Bucket: bucket,
       Prefix: prefix,
     }).promise();
-    
+
     if (!listResponse.Contents || listResponse.Contents.length === 0) {
       throw new Error(`No page images found in S3 for job ${jobId}`);
     }
-    
+
     // Sort by page number (assuming format: jobId_pages/page_1.png, page_2.png, etc.)
     const imageKeys = listResponse.Contents
       .map((obj: any) => obj.Key)
       .filter((key: string) => key.endsWith('.png'))
       .sort();
-    
+
     logger.info('Found page images in S3', {
       jobId,
       pageCount: imageKeys.length,
     });
-    
+
     // Download each image and convert to base64 data URL
     const imageDataUrls: string[] = [];
     for (const key of imageKeys) {
@@ -72,16 +72,16 @@ async function extractPagesAsImages(jobId: string): Promise<string[]> {
         Bucket: bucket,
         Key: key,
       }).promise();
-      
+
       const base64 = imageResponse.Body.toString('base64');
       imageDataUrls.push(`data:image/png;base64,${base64}`);
     }
-    
+
     logger.info('Pages loaded as images', {
       jobId,
       pageCount: imageDataUrls.length,
     });
-    
+
     return imageDataUrls;
   } catch (error) {
     logger.error('Failed to load page images from S3', { error, jobId });
@@ -100,65 +100,76 @@ async function analyzePageWithVision(
 ): Promise<PageAnalysis> {
   const startTime = Date.now();
   const requestId = correlationId || uuidv4();
-  
+
   // Get vision model from environment or use default
   const model = process.env.VISION_MODEL || 'google/gemini-2.0-flash-exp:free';
-  
+
   logger.info('Analyzing page with vision LLM', {
     correlationId: requestId,
     pageNumber,
     model,
   });
-  
-  const prompt = `You are an expert educational content analyzer. Analyze this PDF page which is material for a lecture.
 
-STEP 1: VISUAL ANALYSIS
-- Identify any diagrams, charts, figures, tables, or visual schemas
-- Convert the visual data in these elements into textual descriptions
-- Note any mathematical formulas or equations
-- Identify any citations or references
+  const prompt = `You are an expert educational content analyzer. Your task is to analyze the provided PDF page image, which is material for a university-level lecture, and organize it into logical, distinct segments for script generation.
 
-STEP 2: CONCEPTUAL SEGMENT GENERATION
-- Organize the content (text + visual descriptions) into logical units of knowledge
-- Each segment represents a distinct topic or concept on this page
-- Order them logically
-- If the page has a single unified topic, create one segment
-- If the page covers multiple distinct concepts, create multiple segments
+---
 
-STEP 3: OUTPUT
-Return strictly a JSON object with this schema:
+## Instructions
+
+**PRIMARY OBJECTIVE: DYNAMIC CONCEPTUAL SCALING.**
+Produce the *absolute minimum number of segments* necessary to cover the distinct concepts.
+
+**CRITICAL RULE: AGGRESSIVE MERGING**
+1.  **Consolidate by Topic:** If a topic spans multiple paragraphs, the entire page, or even continues from previous context, create ONLY ONE segment.
+2.  **No Arbitrary Limits:** Do not target a specific number of segments. If the page is one big concept, use 1 segment. If it has 3 distinct, unrelated topics, use 3. **Err heavily on the side of MERGING.**
+3.  **No Sub-Segmentation:** Do NOT create separate segments for definitions, examples, or minor sub-sections. Merge them into the main segment.
+**STEP 1: VISUAL AND TEXTUAL ANALYSIS**
+- Identify all text content, including headings, footnotes, and captions.
+- Identify all diagrams, charts, figures, tables, mathematical formulas, and equations.
+- Identify any explicit citations or references.
+
+**STEP 2: CONCEPTUAL SEGMENT GENERATION**
+- **Consolidate** all related content into the fewest possible segments.
+- For each generated segment, the 'description' field must include **ALL** relevant information from the source material related to that specific segment's topic.
+
+---
+
+**STEP 3: OUTPUT**
+Return strictly a JSON object with this schema. Do NOT wrap it in markdown code blocks. Return ONLY the raw JSON object.
+
+\`\`\`json
 {
   "segments": [
     {
       "id": number,
-      "title": "string",
-      "description": "string (include ALL visual context - figures, tables, formulas converted to text)"
+      "title": "string (A clear title for the concept)",
+      "description": "string (A comprehensive, detailed description of the concept. Include ALL visual context, such as figures, tables, formulas, and citations, converted into clear, educational text.)"
     }
   ]
 }
+\`\`\`
 
-Example:
+**Example of the Output Structure:**
+
+\`\`\`json
 {
   "segments": [
     {
       "id": 1,
-      "title": "Introduction to Thermodynamics",
-      "description": "Explaining the basic definition of thermodynamics. The slide shows a diagram of a heat engine with a hot reservoir at the top, cold reservoir at the bottom, and arrows showing energy flow of 100J in, 60J work out, and 40J heat rejected."
-    },
-    {
-      "id": 2,
-      "title": "The First Law",
-      "description": "Discussing conservation of energy. The equation shown is ΔU = Q - W, where ΔU is change in internal energy, Q is heat added, and W is work done by the system."
+      "title": "Introduction to Thermodynamics and State Variables",
+      "description": "Explaining the basic definition of thermodynamics and the three primary state variables (Pressure P, Volume V, Temperature T). The diagram visually presented shows a piston cylinder assembly, with 100J of heat entering the system and 60J of work being done by the piston. The key mathematical relation is the Ideal Gas Law: PV = nRT, which relates all three variables. (Source: Smith & Jones, 2021, Ch 2)."
     }
   ]
 }
+\`\`\`
 
 IMPORTANT: 
 - Do NOT wrap in markdown code blocks
 - Return ONLY the raw JSON object
 - Include ALL text content from the page in the descriptions
 - Convert ALL visual elements (figures, tables, formulas) to text descriptions
-- Be comprehensive - don't leave out any content`;
+- Be comprehensive - don't leave out any content
+`;
 
   try {
     const response = await llmService.vision({
@@ -167,45 +178,37 @@ IMPORTANT:
       model,
       maxTokens: config.vision.maxTokens,
     });
-    
+
     const duration = Date.now() - startTime;
-    
+
     logger.info('Vision LLM response received', {
       correlationId: requestId,
       pageNumber,
       duration,
       responseLength: response.length,
     });
-    
-    // Parse JSON response
-    // Remove markdown code blocks if present
-    let jsonText = response.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-    
-    const parsed: PageAnalysis = JSON.parse(jsonText);
-    
+
+    // Extract and parse JSON
+    const parsed = cleanAndParseJson(response);
+
     // Validate structure
     if (!parsed.segments || !Array.isArray(parsed.segments)) {
       throw new Error('Invalid response structure: missing segments array');
     }
-    
+
     for (const segment of parsed.segments) {
       if (typeof segment.id !== 'number' || !segment.title || !segment.description) {
         throw new Error('Invalid segment structure: missing required fields');
       }
     }
-    
+
     logger.info('Page analysis completed', {
       correlationId: requestId,
       pageNumber,
       segmentCount: parsed.segments.length,
       duration,
     });
-    
+
     // Record metrics
     recordLLMCallMetrics({
       operation: 'vision_page_analysis',
@@ -217,11 +220,11 @@ IMPORTANT:
       durationMs: duration,
       success: true,
     });
-    
+
     return parsed;
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     // Explicitly serialize the error object for better logging
     const serializedError = {
       name: error instanceof Error ? error.name : 'UnknownError',
@@ -231,7 +234,7 @@ IMPORTANT:
       ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
       ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
     };
-    
+
     logger.error('Vision page analysis failed', {
       correlationId: requestId,
       pageNumber,
@@ -239,7 +242,7 @@ IMPORTANT:
       duration,
       errorMessage: serializedError.message,
     });
-    
+
     // Record failure metrics
     recordLLMCallMetrics({
       operation: 'vision_page_analysis',
@@ -252,7 +255,7 @@ IMPORTANT:
       success: false,
       errorType: serializedError.message, // Use the serialized error message
     });
-    
+
     throw error;
   }
 }
@@ -276,51 +279,51 @@ export async function analyzeContentVisionFirst(
   correlationId?: string
 ): Promise<SegmentedContent> {
   const requestId = correlationId || uuidv4();
-  
+
   try {
     logger.info('Starting vision-first content analysis', {
       correlationId: requestId,
       jobId,
     });
-    
+
     // Extract all pages as images from S3
     // (assumes Python Lambda already converted PDF to images)
     const pageImages = await extractPagesAsImages(jobId);
-    
+
     logger.info('Analyzing pages with vision LLM', {
       correlationId: requestId,
       pageCount: pageImages.length,
     });
-    
+
     // Analyze each page with vision LLM (sequentially to avoid rate limits)
     const pageAnalyses: PageAnalysis[] = [];
-    
+
     for (let i = 0; i < pageImages.length; i++) {
       const image = pageImages[i];
       const pageNum = i + 1;
-      
+
       logger.info(`Processing page ${pageNum} of ${pageImages.length}`, { correlationId: requestId });
-      
+
       const analysis = await analyzePageWithVision(image, pageNum, `${requestId}-page-${pageNum}`);
       pageAnalyses.push(analysis);
-      
+
       // Add delay between pages to respect rate limits
       if (i < pageImages.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
-    
+
     // Aggregate segments from all pages
     let allSegments: ContentSegment[] = [];
     let segmentCounter = 0;
-    
+
     for (let pageIndex = 0; pageIndex < pageAnalyses.length; pageIndex++) {
       const pageAnalysis = pageAnalyses[pageIndex];
       const pageNumber = pageIndex + 1;
-      
+
       for (const rawSegment of pageAnalysis.segments) {
         segmentCounter++;
-        
+
         allSegments.push({
           id: uuidv4(),
           title: rawSegment.title,
@@ -336,26 +339,26 @@ export async function analyzeContentVisionFirst(
         });
       }
     }
-    
+
     // Optional: Merge related segments across pages
     const mergedSegments = mergeRelatedSegments(allSegments);
-    
+
     // Assign final ordering
     mergedSegments.forEach((segment, index) => {
       segment.order = index + 1;
     });
-    
+
     const result: SegmentedContent = {
       segments: mergedSegments,
     };
-    
+
     logger.info('Vision-first content analysis completed', {
       correlationId: requestId,
       jobId,
       totalPages: pageImages.length,
       totalSegments: mergedSegments.length,
     });
-    
+
     return result;
   } catch (error) {
     // Explicitly serialize the error object for better logging
@@ -366,7 +369,7 @@ export async function analyzeContentVisionFirst(
       ...(error && typeof error === 'object' && 'retryable' in error ? { retryable: (error as any).retryable } : {}),
       ...(error && typeof error === 'object' && 'retryAfter' in error ? { retryAfter: (error as any).retryAfter } : {}),
     };
-    
+
     logger.error('Vision-first content analysis failed', {
       correlationId: requestId,
       jobId,
@@ -374,4 +377,28 @@ export async function analyzeContentVisionFirst(
     });
     throw error;
   }
+}
+
+/**
+ * Helper to clean and parse JSON from LLM response
+ * Handles markdown code blocks, surrounding text, and basic cleanup
+ */
+function cleanAndParseJson(text: string): any {
+  let cleaned = text.trim();
+
+  // 1. Extract JSON block if marked with markdown
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1];
+  }
+
+  // 2. Find the first '{' and last '}' to strip surrounding text
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned);
 }

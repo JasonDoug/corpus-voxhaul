@@ -13,90 +13,90 @@ const { v4: uuidv4 } = require('uuid');
  * Create base prompt for explaining scientific concepts accessibly
  */
 export function createBasePrompt(): string {
-  return `You are an expert science communicator creating an engaging audio lecture from scientific content.
+  return `Your core objectives are to:
+1. Simplify complex scientific concepts into accessible language.
+2. Ensure the content is engaging and easily digestible for a general audience.
+3. Verbally describe all visual elements (figures, tables, formulas).
+4. Maintain scientific accuracy while simplifying explanations.
+5. Create a natural, conversational flow suitable for audio narration.
 
-Your goal is to:
-1. Explain complex scientific concepts in clear, accessible language
-2. Make the content engaging and easy to understand for a general audience
-3. Provide verbal descriptions of all visual elements (figures, tables, formulas)
-4. Maintain scientific accuracy while simplifying explanations
-5. Create a natural, conversational flow suitable for audio narration
-
-Guidelines:
-- Use analogies and examples to clarify difficult concepts
-- Define technical terms when first introduced
-- Explain the significance and implications of findings
-- Connect ideas to show how concepts relate to each other
-- For figures: Describe what is shown, key patterns, and what it means
-- For tables: Summarize the data and highlight important trends or comparisons
-- For formulas: Explain what each variable represents and what the formula tells us
-- Avoid phrases like "as shown in the figure" - instead describe what the figure shows
-- Write in a natural speaking style, not formal academic writing
-- Use complete sentences that flow well when read aloud`;
+General guidelines:
+- Use analogies and examples to clarify difficult concepts.
+- Define technical terms when first introduced.
+- Explain the significance and implications of findings.
+- Connect ideas to show how concepts relate to each other.
+- For figures: Describe what is shown, key patterns, and what it means.
+- For tables: Summarize the data and highlight important trends or comparisons.
+- For formulas: Explain what each variable represents and what the formula tells us.
+- Avoid phrases like "as shown in the figure" - instead describe what the figure shows.
+- Write in a natural speaking style, not formal academic writing.
+- Use complete sentences that flow well when read aloud.`;
 }
 
 /**
  * Create personality-specific prompt variations
  */
 export function createPersonalityPrompt(agent: LectureAgent): string {
-  const basePrompt = createBasePrompt();
-  
+  // Agent personality and tone should be the primary context for the LLM
   const personalityInstructions = agent.personality.instructions;
   const tone = agent.personality.tone;
   const examples = agent.personality.examples || [];
-  
-  let personalitySection = `\n\nPERSONALITY AND TONE:\n`;
-  personalitySection += `You are presenting as: ${agent.name}\n`;
-  personalitySection += `${personalityInstructions}\n\n`;
-  
+
+  let personalitySection = `You are an expert lecture presenter. Your persona is: ${agent.name}.
+
+PERSONALITY INSTRUCTIONS:
+${personalityInstructions}
+
+TONE: ${tone}
+`;
+
   // Add tone-specific guidance
   switch (tone) {
     case 'humorous':
-      personalitySection += `Tone: Humorous and entertaining
-- Include appropriate jokes, puns, or witty observations
-- Use playful analogies and comparisons
-- Keep the mood light while maintaining educational value
-- Don't force humor - it should feel natural
-- Balance entertainment with clear explanations\n`;
+      personalitySection += `- Include appropriate jokes, puns, or witty observations.
+- Use playful analogies and comparisons.
+- Keep the mood light while maintaining educational value.
+- Don't force humor - it should feel natural.
+- Balance entertainment with clear explanations.
+`;
       break;
-      
+
     case 'serious':
-      personalitySection += `Tone: Serious and academic
-- Maintain formal, professional language
-- Focus on precision and accuracy
-- Use scholarly vocabulary appropriately
-- Emphasize the rigor and importance of the research
-- Adopt a measured, authoritative delivery\n`;
+      personalitySection += `- Maintain formal, professional language.
+- Focus on precision and accuracy.
+- Use scholarly vocabulary appropriately.
+- Emphasize the rigor and importance of the research.
+- Adopt a measured, authoritative delivery.
+`;
       break;
-      
+
     case 'casual':
-      personalitySection += `Tone: Casual and conversational
-- Use everyday language and informal expressions
-- Speak as if explaining to a friend
-- Include relatable examples from daily life
-- Keep it relaxed and approachable
-- Use contractions and natural speech patterns\n`;
+      personalitySection += `- Use everyday language and informal expressions.
+- Speak as if explaining to a friend.
+- Include relatable examples from daily life.
+- Keep it relaxed and approachable.
+- Use contractions and natural speech patterns.
+`;
       break;
-      
+
     case 'formal':
-      personalitySection += `Tone: Formal and structured
-- Use proper academic conventions
-- Maintain professional distance
-- Organize information systematically
-- Use precise technical terminology
-- Follow traditional lecture structure\n`;
+      personalitySection += `- Use proper academic conventions.
+- Maintain professional distance.
+- Organize information systematically.
+- Use precise technical terminology.
+`;
       break;
-      
+
     case 'enthusiastic':
-      personalitySection += `Tone: Enthusiastic and energetic
-- Express excitement about the discoveries
-- Use dynamic, engaging language
-- Emphasize the fascinating aspects
-- Convey passion for the subject matter
-- Inspire curiosity and wonder\n`;
+      personalitySection += `- Express excitement about the discoveries.
+- Use dynamic, engaging language.
+- Emphasize the fascinating aspects.
+- Convey passion for the subject matter.
+- Inspire curiosity and wonder.
+`;
       break;
   }
-  
+
   // Add examples if provided
   if (examples.length > 0) {
     personalitySection += `\nExample phrases in your style:\n`;
@@ -105,7 +105,8 @@ export function createPersonalityPrompt(agent: LectureAgent): string {
     });
   }
   
-  return basePrompt + personalitySection;
+  // Combine personality and base prompt, ensuring personality is dominant
+  return personalitySection + '\n' + createBasePrompt();
 }
 
 /**
@@ -118,102 +119,81 @@ export function createSegmentPrompt(
   totalSegments: number
 ): string {
   const personalityPrompt = createPersonalityPrompt(agent);
-  
+
   let segmentPrompt = `\n\n${'='.repeat(80)}\n`;
   segmentPrompt += `SEGMENT ${segmentIndex + 1} of ${totalSegments}: ${segment.title}\n`;
   segmentPrompt += `${'='.repeat(80)}\n\n`;
-  
+
   // Add context about segment position
   if (segmentIndex === 0) {
-    segmentPrompt += `CONTEXT: This is the FIRST segment. Introduce the topic and set the stage for the lecture.\n\n`;
+    segmentPrompt += `CONTEXT: This is the very BEGINNING of the lecture. Start with a warm welcome, introduce the topic, and set the stage.\n\n`;
   } else if (segmentIndex === totalSegments - 1) {
-    segmentPrompt += `CONTEXT: This is the FINAL segment. Wrap up the lecture and provide concluding thoughts.\n\n`;
+    segmentPrompt += `CONTEXT: This is the FINAL part of the lecture. Cover the content, then provide a concluding summary of the entire lecture.\n\n`;
   } else {
-    segmentPrompt += `CONTEXT: This is segment ${segmentIndex + 1} of ${totalSegments}. Build on previous concepts and prepare for what's next.\n\n`;
+    segmentPrompt += `CONTEXT: This is PART ${segmentIndex + 1} of a longer continuing lecture. You are in the MIDDLE of the talk.\n`;
+    segmentPrompt += `CRITICAL INSTRUCTION: DO NOT introduce yourself again. DO NOT say "Welcome back" or "In this segment". Simply CONTINUE the narrative flow seamlessly from the previous concepts.\n\n`;
   }
-  
-  segmentPrompt += `Create an engaging lecture script for this segment. The script should be suitable for audio narration.\n\n`;
-  
-  // Count visual elements for summary
-  let figureCount = 0;
-  let tableCount = 0;
-  let formulaCount = 0;
-  
+
+  segmentPrompt += `Create an engaging spoken narrative for this specific part of the lecture. Focus ONLY on the content provided for this segment.\n\n`;
+
+  // Calculate actual word count of the input content for this segment
+  let inputContentWordCount = 0;
+  let inputContentText = '';
   segment.contentBlocks.forEach(block => {
-    if (block.type === 'figure') figureCount++;
-    if (block.type === 'table') tableCount++;
-    if (block.type === 'formula') formulaCount++;
-  });
-  
-  // Add visual element summary
-  if (figureCount > 0 || tableCount > 0 || formulaCount > 0) {
-    segmentPrompt += `VISUAL ELEMENTS IN THIS SEGMENT:\n`;
-    if (figureCount > 0) segmentPrompt += `- ${figureCount} figure(s)\n`;
-    if (tableCount > 0) segmentPrompt += `- ${tableCount} table(s)\n`;
-    if (formulaCount > 0) segmentPrompt += `- ${formulaCount} formula(s)\n`;
-    segmentPrompt += `\n`;
-  }
-  
-  // Add content blocks
-  segmentPrompt += `CONTENT TO COVER:\n\n`;
-  
-  segment.contentBlocks.forEach((block, index) => {
-    segmentPrompt += `--- Content Block ${index + 1} (Page ${block.pageReference}) ---\n`;
-    
     switch (block.type) {
       case 'text':
-        segmentPrompt += `Text content:\n${block.content}\n\n`;
+        inputContentText += block.content + ' ';
         break;
-        
       case 'figure':
         const figure = block.content as Figure;
-        segmentPrompt += `Figure:\n`;
-        segmentPrompt += `Caption: ${figure.caption || 'N/A'}\n`;
-        segmentPrompt += `Description: ${figure.description}\n`;
-        segmentPrompt += `[Provide a clear verbal description of this figure in your script]\n\n`;
+        inputContentText += (figure.caption || '') + ' ' + figure.description + ' ';
         break;
-        
       case 'table':
         const table = block.content as Table;
-        segmentPrompt += `Table:\n`;
-        segmentPrompt += `Headers: ${table.headers.join(', ')}\n`;
-        segmentPrompt += `Interpretation: ${table.interpretation}\n`;
-        segmentPrompt += `[Summarize the key data and trends from this table in your script]\n\n`;
+        inputContentText += table.interpretation + ' ';
         break;
-        
       case 'formula':
         const formula = block.content as Formula;
-        segmentPrompt += `Formula:\n`;
-        segmentPrompt += `LaTeX: ${formula.latex}\n`;
-        segmentPrompt += `Explanation: ${formula.explanation}\n`;
-        segmentPrompt += `[Explain this formula verbally, describing what each part means]\n\n`;
+        inputContentText += formula.explanation + ' ';
         break;
-        
       case 'citation':
-        segmentPrompt += `Citation: ${JSON.stringify(block.content)}\n`;
-        segmentPrompt += `[Reference this work naturally in your explanation]\n\n`;
+        inputContentText += JSON.stringify(block.content) + ' '; // Cautious for citations
         break;
     }
   });
+  inputContentWordCount = countWords(inputContentText);
+
+  // Estimate speaking time based on input word count (e.g., 150 words per minute)
+  // Ensure a minimum target of 0.5 minutes (30 seconds) to avoid asking for excessively short output
+  let estimatedMinutes = Math.min(5, Math.max(0.5, Math.round((inputContentWordCount / 150) * 10) / 10));
+  if (estimatedMinutes === 0.5 && inputContentWordCount > 100) { // If a lot of content, but still rounds to 0.5, bump it
+      estimatedMinutes = 1;
+  }
   
-  // Add length guidance
-  const estimatedMinutes = Math.max(2, Math.min(5, segment.contentBlocks.length));
+  const estimatedWords = Math.round(estimatedMinutes * 150);
+
   segmentPrompt += `\nLENGTH GUIDANCE:\n`;
-  segmentPrompt += `Target: ${estimatedMinutes}-${estimatedMinutes + 1} minutes of speaking time (approximately ${estimatedMinutes * 150}-${(estimatedMinutes + 1) * 150} words)\n\n`;
-  
+  segmentPrompt += `Target: Approximately ${estimatedMinutes} minutes of speaking time (around ${estimatedWords} words). **Be concise.**\n\n`;
+
   segmentPrompt += `INSTRUCTIONS:\n`;
-  segmentPrompt += `1. Write a complete lecture script for this segment\n`;
-  segmentPrompt += `2. Integrate all content blocks into a cohesive narrative\n`;
-  segmentPrompt += `3. Provide verbal descriptions for all visual elements\n`;
-  segmentPrompt += `4. Maintain your personality and tone throughout\n`;
-  segmentPrompt += `5. Write in a natural speaking style suitable for audio\n`;
-  segmentPrompt += `6. The script should flow smoothly when read aloud\n`;
-  segmentPrompt += `7. Reference specific figures, tables, and formulas by describing what they show\n\n`;
-  
-  segmentPrompt += `Respond with ONLY the lecture script text, no additional formatting or metadata.\n`;
-  
+  segmentPrompt += `1. Write the spoken content for this section ONLY.\n`;
+  if (segmentIndex !== 0) {
+    segmentPrompt += `2. START IMMEDIATELY with the narrative. NO greetings, NO re-introductions, NO phrases like "In this segment". Assume seamless continuation from the previous part.\n`;
+  } else {
+    segmentPrompt += `2. Begin with a suitable opening for the start of a lecture, introducing yourself and the topic if appropriate for the agent's persona.\n`;
+  }
+  segmentPrompt += `3. Integrate all provided CONTENT TO COVER into a cohesive spoken narrative.\n`;
+  segmentPrompt += `4. Provide clear verbal descriptions for all visual elements listed.\n`;
+  segmentPrompt += `5. Maintain your established personality and tone throughout.\n`;
+  segmentPrompt += `6. Write in a natural speaking style suitable for audio narration.\n`;
+  segmentPrompt += `7. The script should flow smoothly when read aloud.\n`;
+  segmentPrompt += `8. Adhere to the LENGTH GUIDANCE as closely as possible without sacrificing content quality or clarity. Focus on conciseness. Avoid repetition and unnecessary elaboration.\n\n`;
+
+  // Continue with rest of function
   return personalityPrompt + segmentPrompt;
 }
+
+// Count visual elements for summary
 
 /**
  * Get instructions for verbal descriptions of visual elements
@@ -254,7 +234,7 @@ export function applyPersonalityModifications(
   agent: LectureAgent
 ): string {
   let modifiedText = scriptText;
-  
+
   // Apply tone-specific modifications
   switch (agent.personality.tone) {
     case 'humorous':
@@ -264,24 +244,24 @@ export function applyPersonalityModifications(
         logger.warn('Script may lack humor for humorous agent', { agentId: agent.id });
       }
       break;
-      
+
     case 'serious':
       // Ensure formal language
       // Remove contractions for more formal tone
       modifiedText = removeContractions(modifiedText);
       break;
-      
+
     case 'casual':
       // Ensure casual language
       // Add contractions if missing
       modifiedText = addContractions(modifiedText);
       break;
-      
+
     case 'formal':
       // Ensure formal structure
       modifiedText = removeContractions(modifiedText);
       break;
-      
+
     case 'enthusiastic':
       // Ensure enthusiastic language is present
       if (!hasEnthusiasticMarkers(modifiedText)) {
@@ -289,7 +269,7 @@ export function applyPersonalityModifications(
       }
       break;
   }
-  
+
   return modifiedText;
 }
 
@@ -303,7 +283,7 @@ function hasHumorMarkers(text: string): boolean {
     /!/,  // Exclamation marks often indicate humor
     /\?.*\?/,  // Multiple questions can indicate playful tone
   ];
-  
+
   return humorIndicators.some(pattern => pattern.test(text));
 }
 
@@ -316,7 +296,7 @@ function hasEnthusiasticMarkers(text: string): boolean {
     /\b(exciting|wonderful|fantastic|brilliant)\b/i,
     /!/,  // Exclamation marks
   ];
-  
+
   return enthusiasmIndicators.some(pattern => pattern.test(text));
 }
 
@@ -360,7 +340,7 @@ function removeContractions(text: string): string {
     "you'll": "you will",
     "I'll": "I will",
   };
-  
+
   let result = text;
   for (const [contraction, expansion] of Object.entries(contractions)) {
     // Case-insensitive replacement
@@ -373,7 +353,7 @@ function removeContractions(text: string): string {
       return expansion;
     });
   }
-  
+
   return result;
 }
 
@@ -417,7 +397,7 @@ function addContractions(text: string): string {
     "you will": "you'll",
     "I will": "I'll",
   };
-  
+
   let result = text;
   for (const [expansion, contraction] of Object.entries(expansions)) {
     // Case-insensitive replacement, but be careful not to replace in the middle of sentences
@@ -430,7 +410,7 @@ function addContractions(text: string): string {
       return contraction;
     });
   }
-  
+
   return result;
 }
 
@@ -454,11 +434,11 @@ export function mergePromptWithPersonality(
 export function calculateDuration(text: string, wordsPerMinute: number = 155): number {
   // Count words in the text
   const wordCount = countWords(text);
-  
+
   // Calculate duration in seconds
   const durationMinutes = wordCount / wordsPerMinute;
   const durationSeconds = durationMinutes * 60;
-  
+
   return Math.round(durationSeconds);
 }
 
@@ -468,7 +448,7 @@ export function calculateDuration(text: string, wordsPerMinute: number = 155): n
 export function countWords(text: string): number {
   // Remove extra whitespace and split by whitespace
   const words = text.trim().split(/\s+/);
-  
+
   // Filter out empty strings
   return words.filter(word => word.length > 0).length;
 }
@@ -489,13 +469,13 @@ export function assignTimingToBlocks(scriptBlocks: Omit<ScriptBlock, 'estimatedD
  */
 export function calculateTotalDuration(segments: ScriptSegment[]): number {
   let totalDuration = 0;
-  
+
   for (const segment of segments) {
     for (const block of segment.scriptBlocks) {
       totalDuration += block.estimatedDuration;
     }
   }
-  
+
   return totalDuration;
 }
 
@@ -559,7 +539,7 @@ ENTHUSIASTIC GUIDELINES:
 - Emphasize the fascinating aspects
 - Convey passion for the subject matter`;
   }
-  
+
   return basePrompt;
 }
 
@@ -568,15 +548,15 @@ ENTHUSIASTIC GUIDELINES:
  */
 async function mockScriptGenerationLLM(_prompt: string, agent: LectureAgent): Promise<string> {
   logger.info('Using mock script generation (feature flag disabled)', { agentId: agent.id });
-  
+
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   // Return a simple mock script with personality hint
-  const toneHint = agent.personality.tone === 'humorous' ? 'with a touch of humor' : 
-                   agent.personality.tone === 'serious' ? 'in a formal academic style' : 
-                   'in a conversational manner';
-  
+  const toneHint = agent.personality.tone === 'humorous' ? 'with a touch of humor' :
+    agent.personality.tone === 'serious' ? 'in a formal academic style' :
+      'in a conversational manner';
+
   return `Welcome to this segment of our lecture, presented ${toneHint}. 
   
 In this section, we'll explore the key concepts and findings from the research. The content has been carefully organized to help you understand the material in a logical progression.
@@ -598,24 +578,24 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
     });
     return mockScriptGenerationLLM(prompt, agent);
   }
-  
+
   const startTime = Date.now();
   const requestId = correlationId || uuidv4();
   let model: string | undefined;
-  
+
   try {
     model = getRecommendedModel('script', llmService.getProvider());
-    
-    logger.info('Calling LLM for script generation', { 
+
+    logger.info('Calling LLM for script generation', {
       correlationId: requestId,
-      model, 
+      model,
       agentId: agent.id,
       agentTone: agent.personality.tone,
     });
-    
+
     // Build personality-specific system prompt
     const systemPrompt = buildScriptSystemPrompt(agent);
-    
+
     const response = await llmService.chat({
       messages: [
         {
@@ -631,9 +611,9 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
       temperature: 0.8, // Higher for more creative/personality-driven output
       maxTokens: 2000,
     });
-    
+
     const duration = Date.now() - startTime;
-    
+
     logger.info('Script generation completed successfully', {
       correlationId: requestId,
       scriptLength: response.content.length,
@@ -643,7 +623,7 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
       completionTokens: response.usage?.completionTokens,
       agentId: agent.id,
     });
-    
+
     // Record operation-specific metrics
     if (response.usage) {
       recordLLMCallMetrics({
@@ -657,11 +637,11 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
         success: true,
       });
     }
-    
+
     return response.content;
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     // Record failure metrics
     recordLLMCallMetrics({
       operation: 'script_generation',
@@ -674,11 +654,11 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
       success: false,
       errorType: error instanceof Error ? error.message : 'Unknown error',
     });
-    
-    logger.error('Script generation LLM call failed', { 
+
+    logger.error('Script generation LLM call failed', {
       correlationId: requestId,
-      error, 
-      agentId: agent.id, 
+      error,
+      agentId: agent.id,
       duration,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
       errorStack: error instanceof Error ? error.stack : undefined,
@@ -698,7 +678,7 @@ async function generateScriptForSegment(
   correlationId?: string
 ): Promise<ScriptSegment> {
   const requestId = correlationId || uuidv4();
-  
+
   logger.info('Generating script for segment', {
     correlationId: requestId,
     segmentId: segment.id,
@@ -707,33 +687,33 @@ async function generateScriptForSegment(
     segmentIndex,
     totalSegments,
   });
-  
+
   // Create prompt for this segment
   const prompt = createSegmentPrompt(segment, agent, segmentIndex, totalSegments);
-  
+
   // Call LLM to generate script
   const scriptText = await callScriptGenerationLLM(prompt, agent, requestId);
-  
+
   // Apply personality modifications
   const modifiedScript = applyPersonalityModifications(scriptText, agent);
-  
+
   // Create script blocks from the generated text
   // For now, we'll create one block per content block
   // In a more sophisticated implementation, we might split the script differently
   const scriptBlocks: Omit<ScriptBlock, 'estimatedDuration'>[] = [];
-  
+
   // Split script into paragraphs
   const paragraphs = modifiedScript.split(/\n\n+/).filter(p => p.trim().length > 0);
-  
+
   // Create a script block for each paragraph, mapping to content blocks
   paragraphs.forEach((paragraph, index) => {
     // Map to corresponding content block (or create a default if none exist)
     let contentReference;
-    
+
     if (segment.contentBlocks.length > 0) {
       const contentBlockIndex = Math.min(index, segment.contentBlocks.length - 1);
       const contentBlock = segment.contentBlocks[contentBlockIndex];
-      
+
       contentReference = {
         type: contentBlock.type,
         id: typeof contentBlock.content === 'string' ? 'text' : (contentBlock.content as any).id || 'unknown',
@@ -747,17 +727,17 @@ async function generateScriptForSegment(
         pageNumber: 1,
       };
     }
-    
+
     scriptBlocks.push({
       id: uuidv4(),
       text: paragraph.trim(),
       contentReference,
     });
   });
-  
+
   // Assign timing to blocks
   const blocksWithTiming = assignTimingToBlocks(scriptBlocks);
-  
+
   return {
     segmentId: segment.id,
     title: segment.title,
@@ -771,29 +751,29 @@ async function generateScriptForSegment(
  */
 export async function generateScript(jobId: string, agentId?: string): Promise<LectureScript> {
   const correlationId = `script-${jobId}-${uuidv4()}`;
-  
+
   try {
-    logger.info('Starting script generation', { 
-      jobId, 
+    logger.info('Starting script generation', {
+      jobId,
       agentId,
       correlationId,
     });
-    
+
     // Import dynamodb functions here to avoid circular dependencies
     const { getContent, updateContent, getAgent, updateJob } = require('./dynamodb');
-    
+
     // Retrieve segmented content from database
     const contentRecord = await getContent(jobId);
     if (!contentRecord || !contentRecord.segmentedContent) {
       throw new Error(`No segmented content found for job: ${jobId}`);
     }
-    
+
     const segmentedContent = contentRecord.segmentedContent;
-    
+
     // Retrieve agent configuration
     // If agentId is provided, use that agent; otherwise, check if job has an agent
     let agent: LectureAgent | null = null;
-    
+
     if (agentId) {
       agent = await getAgent(agentId);
     } else {
@@ -804,7 +784,7 @@ export async function generateScript(jobId: string, agentId?: string): Promise<L
         agent = await getAgent(job.agentId);
       }
     }
-    
+
     // If no agent found, create a default agent
     if (!agent) {
       logger.warn('No agent specified, using default agent');
@@ -824,47 +804,47 @@ export async function generateScript(jobId: string, agentId?: string): Promise<L
         createdAt: new Date(),
       };
     }
-    
+
     // Generate script for each segment
     const scriptSegments: ScriptSegment[] = [];
     const totalSegments = segmentedContent.segments.length;
-    
+
     for (let i = 0; i < totalSegments; i++) {
       const segment = segmentedContent.segments[i];
       const segmentCorrelationId = `${correlationId}-seg${i}`;
       const scriptSegment = await generateScriptForSegment(segment, agent, i, totalSegments, segmentCorrelationId);
       scriptSegments.push(scriptSegment);
     }
-    
+
     // Calculate total duration
     const totalDuration = calculateTotalDuration(scriptSegments);
-    
+
     const lectureScript: LectureScript = {
       segments: scriptSegments,
       totalEstimatedDuration: totalDuration,
     };
-    
+
     // Store lecture script in database
     await updateContent(jobId, {
       script: lectureScript,
     });
-    
+
     // Update job status
     await updateJob(jobId, {
       status: 'synthesizing_audio',
     });
-    
+
     logger.info('Script generation completed', {
       jobId,
       correlationId,
       segmentCount: scriptSegments.length,
       totalDuration,
     });
-    
+
     return lectureScript;
   } catch (error) {
-    logger.error('Script generation failed', { 
-      jobId, 
+    logger.error('Script generation failed', {
+      jobId,
       correlationId,
       error,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
