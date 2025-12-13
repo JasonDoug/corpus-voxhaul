@@ -1,0 +1,65 @@
+# Production Hardening & Optimization Tasks
+
+- [x] **Infrastructure Upgrades**
+    - [x] Refactor AWS SDK from v2 to v3 <!-- id: 1 -->
+    - [x] Upgrade Runtime to Node 24 (Deployed Node 20.x LTS) <!-- id: 2 -->
+    - [x] Fix CORS 403 Forbidden on OPTIONS requests (Removed Global ApiKeyRequired)
+
+- [x] **Observability & Cost**
+    - [x] **Structured Logging** <!-- id: 11 -->
+        - [x] Ensure JSON logging (Already in [logger.ts](file:///home/jason/Projects/Corpus-Vox/src/utils/logger.ts))
+    - [x] **Cost Tracking** <!-- id: 12 -->
+        - [x] Create `PricingRegistry` and `CostEngine`
+        - [x] Integrate into `llmService`
+        - [x] Dashboard metrics ([LLMCost](file:///home/jason/Projects/Corpus-Vox/src/utils/llm-cost.ts#56-80), `InputTokens`, `OutputTokens`)
+
+- [x] **Debugging & Connectivity**
+    - [x] ~~Fix "Failed to load agents" (CORS 403 on OPTIONS)~~ <!-- id: 4 -->
+    - [ ] Fix "Network Error" on PDF Upload (CORS success/error headers) <!-- id: 5 -->
+        - [x] Patch [src/functions/upload.ts](file:///home/jason/Projects/Corpus-Vox/src/functions/upload.ts) with CORS headers
+        - [ ] Deploy fix to AWS (Troubleshooting: Size limit Exceeded)
+            - [x] Fix Auth/Session timeout
+            - [ ] Fix "Unzipped size must be smaller than 250MB" (Excluding `pdf-to-img`, `node-poppler`)
+        - [ ] Test multiple simultaneous uploads
+        - [ ] Verify job queuing works (DynamoDB Streams/SQS)
+        - [ ] Test resource conflicts (same file, same user)
+    - [ ] **Performance Monitoring** <!-- id: 4 -->
+        - [ ] Measure processing time per stage
+
+- [ ] **Performance & Scalability**
+    - [ ] **Concurrent Processing** <!-- id: 3 -->
+        - [ ] Establish performance baselines
+    - [ ] **Rate Limiting Review** <!-- id: 5 -->
+        - [ ] Review OpenRouter limits
+        - [ ] Document strategy
+
+- [ ] **Comprehensive Testing**
+    - [ ] **Error Handling** <!-- id: 6 -->
+        - [ ] Test Corrupted PDF
+        - [ ] Test Oversized PDF
+        - [ ] Test Non-PDF file
+        - [ ] Test Empty PDF
+        - [ ] Test Image-only PDF
+        - [ ] Test Non-English PDF
+    - [ ] **Agent Testing** <!-- id: 7 -->
+        - [ ] CRUD operations
+        - [ ] Agent persistence (does it stay selected?)
+        - [ ] Invalid configuration handling
+        - [ ] Personality differences in script
+    - [ ] **Content Complexity** <!-- id: 8 -->
+        - [ ] Short vs Long papers
+        - [ ] Figure/Formula heavy
+        - [ ] Table/Citation heavy
+
+- [ ] **Feature Enhancements**
+    - [ ] **Player Optimization** <!-- id: 9 -->
+        - [ ] Display Original PDF
+        - [ ] Segment Navigation (Click segment -> Jump to audio)
+        - [ ] Immersive Reader Sync (Highlighting)
+        - [ ] Playback Accuracy (Timings)
+    - [ ] **Pipeline Optimization** <!-- id: 13 -->
+        - [ ] Investigate/Fix excessive segmentation (1 sentence segments)
+    - [ ] **Admin Configuration** <!-- id: 10 -->
+        - [ ] Identify all [.env](file:///home/jason/Projects/Corpus-Vox/.env) settings
+        - [ ] Create Admin Page to manage them
+

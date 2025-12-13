@@ -30,7 +30,7 @@ Globals:
         VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
         LLM_MODEL_SCRIPT: 'tngtech/deepseek-r1t2-chimera:free'
         TTS_PROVIDER: 'polly'
-        POLLY_ENGINE: 'generative'
+        POLLY_ENGINE: 'neural'
 
 
 Parameters:
@@ -211,7 +211,7 @@ Resources:
       CodeUri: dist/functions/
       Handler: script.scriptHandler
       Description: Generates lecture script with personality
-      Timeout: 300
+      Timeout: 900
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable

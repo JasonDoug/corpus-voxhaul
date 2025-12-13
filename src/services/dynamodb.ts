@@ -71,7 +71,7 @@ export async function createJob(job: Job): Promise<Job> {
       TableName: config.dynamodb.jobsTable,
       Item: record,
     }).promise();
-    
+
     logger.info('Job created', { jobId: job.jobId });
     return job;
   } catch (error) {
@@ -85,11 +85,11 @@ export async function getJob(jobId: string): Promise<Job | null> {
       TableName: config.dynamodb.jobsTable,
       Key: { jobId },
     }).promise();
-    
+
     if (!result.Item) {
       return null;
     }
-    
+
     return recordToJob(result.Item as JobRecord);
   } catch (error) {
     handleDynamoDBError(error, 'getJob');
@@ -102,20 +102,20 @@ export async function updateJob(jobId: string, updates: Partial<Job>): Promise<J
     if (!current) {
       throw new Error(`Job not found: ${jobId}`);
     }
-    
+
     const updated: Job = {
       ...current,
       ...updates,
       jobId, // Ensure jobId doesn't change
       updatedAt: new Date(),
     };
-    
+
     const record = jobToRecord(updated);
     await dynamoDB.put({
       TableName: config.dynamodb.jobsTable,
       Item: record,
     }).promise();
-    
+
     logger.info('Job updated', { jobId });
     return updated;
   } catch (error) {
@@ -132,7 +132,7 @@ export async function deleteJob(jobId: string): Promise<void> {
       TableName: config.dynamodb.jobsTable,
       Key: { jobId },
     }).promise();
-    
+
     logger.info('Job deleted', { jobId });
   } catch (error) {
     handleDynamoDBError(error, 'deleteJob');
@@ -144,7 +144,7 @@ export async function listJobs(): Promise<Job[]> {
     const result = await dynamoDB.scan({
       TableName: config.dynamodb.jobsTable,
     }).promise();
-    
+
     return (result.Items || []).map(item => recordToJob(item as JobRecord));
   } catch (error) {
     handleDynamoDBError(error, 'listJobs');
@@ -197,13 +197,13 @@ export async function createAgent(agent: LectureAgent): Promise<LectureAgent> {
     if (existing.some(a => a.name === agent.name && a.id !== agent.id)) {
       throw new Error(`Agent with name "${agent.name}" already exists`);
     }
-    
+
     const record = agentToRecord(agent);
     await dynamoDB.put({
       TableName: config.dynamodb.agentsTable,
       Item: record,
     }).promise();
-    
+
     logger.info('Agent created', { agentId: agent.id, name: agent.name });
     return agent;
   } catch (error) {
@@ -220,11 +220,11 @@ export async function getAgent(id: string): Promise<LectureAgent | null> {
       TableName: config.dynamodb.agentsTable,
       Key: { id },
     }).promise();
-    
+
     if (!result.Item) {
       return null;
     }
-    
+
     return recordToAgent(result.Item as AgentRecord);
   } catch (error) {
     handleDynamoDBError(error, 'getAgent');
@@ -237,7 +237,7 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
     if (!current) {
       throw new Error(`Agent not found: ${id}`);
     }
-    
+
     // Check for unique name if name is being updated
     if (updates.name && updates.name !== current.name) {
       const existing = await listAgents();
@@ -245,7 +245,7 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
         throw new Error(`Agent with name "${updates.name}" already exists`);
       }
     }
-    
+
     const updated: LectureAgent = {
       ...current,
       ...updates,
@@ -260,13 +260,13 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
         ...updates.voice,
       } : current.voice,
     };
-    
+
     const record = agentToRecord(updated);
     await dynamoDB.put({
       TableName: config.dynamodb.agentsTable,
       Item: record,
     }).promise();
-    
+
     logger.info('Agent updated', { agentId: id });
     return updated;
   } catch (error) {
@@ -283,7 +283,7 @@ export async function deleteAgent(id: string): Promise<void> {
       TableName: config.dynamodb.agentsTable,
       Key: { id },
     }).promise();
-    
+
     logger.info('Agent deleted', { agentId: id });
   } catch (error) {
     handleDynamoDBError(error, 'deleteAgent');
@@ -295,7 +295,7 @@ export async function listAgents(): Promise<LectureAgent[]> {
     const result = await dynamoDB.scan({
       TableName: config.dynamodb.agentsTable,
     }).promise();
-    
+
     return (result.Items || []).map(item => recordToAgent(item as AgentRecord));
   } catch (error) {
     handleDynamoDBError(error, 'listAgents');
@@ -310,6 +310,7 @@ export interface ContentRecord {
   jobId: string;
   extractedContent?: ExtractedContent;
   segmentedContent?: SegmentedContent;
+  originalSegmentedContent?: SegmentedContent; // Preserve original vision analysis
   script?: any; // LectureScript type from script model
   audioUrl?: string;
   wordTimings?: WordTiming[];
@@ -324,12 +325,12 @@ export async function createContent(jobId: string): Promise<ContentRecord> {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
+
     await dynamoDB.put({
       TableName: config.dynamodb.contentTable,
       Item: record,
     }).promise();
-    
+
     logger.info('Content record created', { jobId });
     return record;
   } catch (error) {
@@ -343,11 +344,11 @@ export async function getContent(jobId: string): Promise<ContentRecord | null> {
       TableName: config.dynamodb.contentTable,
       Key: { jobId },
     }).promise();
-    
+
     if (!result.Item) {
       return null;
     }
-    
+
     return result.Item as ContentRecord;
   } catch (error) {
     handleDynamoDBError(error, 'getContent');
@@ -360,19 +361,19 @@ export async function updateContent(jobId: string, updates: Partial<ContentRecor
     if (!current) {
       throw new Error(`Content not found for job: ${jobId}`);
     }
-    
+
     const updated: ContentRecord = {
       ...current,
       ...updates,
       jobId, // Ensure jobId doesn't change
       updatedAt: new Date().toISOString(),
     };
-    
+
     await dynamoDB.put({
       TableName: config.dynamodb.contentTable,
       Item: updated,
     }).promise();
-    
+
     logger.info('Content updated', { jobId });
     return updated;
   } catch (error) {
@@ -389,7 +390,7 @@ export async function deleteContent(jobId: string): Promise<void> {
       TableName: config.dynamodb.contentTable,
       Key: { jobId },
     }).promise();
-    
+
     logger.info('Content deleted', { jobId });
   } catch (error) {
     handleDynamoDBError(error, 'deleteContent');
@@ -405,9 +406,9 @@ export async function createTablesIfNotExist(): Promise<void> {
     logger.info('Skipping table creation in production mode');
     return;
   }
-  
+
   const dynamoDBClient = new AWS.DynamoDB(dynamoDBConfig);
-  
+
   const tables = [
     {
       TableName: config.dynamodb.jobsTable,
@@ -425,7 +426,7 @@ export async function createTablesIfNotExist(): Promise<void> {
       AttributeDefinitions: [{ AttributeName: 'jobId', AttributeType: 'S' }],
     },
   ];
-  
+
   for (const tableConfig of tables) {
     try {
       await dynamoDBClient.describeTable({ TableName: tableConfig.TableName }).promise();

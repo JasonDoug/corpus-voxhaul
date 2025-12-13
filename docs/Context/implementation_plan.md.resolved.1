@@ -1,0 +1,37 @@
+# Monorepo Migration & Frontend Deployment Plan
+
+**Goal**: Merge the `PDFrontend` repository into the main `Corpus-Vox` repository and configure AWS S3 + CloudFront for serverless frontend hosting.
+
+## User Review Required
+> [!IMPORTANT]
+> **Directory Structure Change**: The frontend code will be moved from `Projects/PDFrontend` to `Projects/Corpus-Vox/frontend`.
+> **Backend Location**: The backend code will remain in the root directory (to avoid breaking existing imports/scripts), resulting in a "Hybrid" structure.
+
+## Proposed Changes
+
+### 1. Directory Restructuring
+-   Create `frontend/` directory in `Corpus-Vox`.
+-   Move all files from `PDFrontend` to `Corpus-Vox/frontend`.
+-   Update `frontend/vite.config.js` to handle production builds correctly.
+
+### 2. Infrastructure ([template.yaml](file:///home/jason/Projects/Corpus-Vox/template.yaml))
+Add the following resources to the SAM template:
+-   **FrontendBucket**: S3 bucket for hosting static assets.
+-   **FrontendDistribution**: CloudFront distribution for CDN and HTTPS.
+-   **BucketPolicy**: Logic to allow CloudFront to read from the S3 bucket.
+
+### 3. Deployment Scripts
+-   Update [scripts/deploy.sh](file:///home/jason/Projects/Corpus-Vox/scripts/deploy.sh) (or create `scripts/deploy-all.sh`) to:
+    1.  Build Backend (`npm run build`).
+    2.  Build Frontend (`cd frontend && npm install && npm run build`).
+    3.  Deploy SAM Infrastructure.
+    4.  Sync `frontend/dist` to the S3 Bucket.
+    5.  Invalidate CloudFront Cache.
+
+### 4. Configuration
+-   Update Frontend to accept API URL via environment variable (`VITE_API_URL`) during build, instead of relying on proxy.
+
+## Verification Plan
+1.  **Local Dev**: Verify `cd frontend && npm run dev` still works.
+2.  **Build**: Verify `npm run build` generates `dist/` correctly.
+3.  **Deployment**: Deploy to AWS and check if the CloudFront URL loads the application.

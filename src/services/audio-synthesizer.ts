@@ -123,103 +123,191 @@ export class PollyTTSProvider implements TTSProvider {
       engine: this.engine,
     });
 
-    return withRetryAndCircuitBreaker(
-      'aws-polly',
-      async () => {
-        try {
-          // Build synthesis parameters
-          const params: any = {
-            Text: text,
-            OutputFormat: 'mp3',
-            VoiceId: voiceConfig.voiceId,
-            Engine: this.engine,
-          };
+    const chunks = this.chunkText(text);
+    if (chunks.length > 1) {
+      logger.info('Text exceeds limit, split into chunks', { count: chunks.length });
+    }
 
-          // Add engine-specific parameters
-          if (this.engine === 'generative') {
-            // Generative engine doesn't support SpeechMarkTypes
-            // We'll need to estimate timings
-            logger.info('Using generative engine (word timings will be estimated)');
-          } else if (this.engine === 'long-form') {
-            // Long-form engine supports speech marks
-            params.SpeechMarkTypes = ['word'];
-          } else {
-            // Neural and standard engines support speech marks
-            params.SpeechMarkTypes = ['word'];
+    const audioBuffers: Buffer[] = [];
+    let totalDuration = 0;
+    const allWordTimings: WordTiming[] = [];
+
+    // Synthesize chunks sequentially
+    for (const [index, chunk] of chunks.entries()) {
+      if (chunks.length > 1) {
+        logger.info(`Synthesizing chunk ${index + 1}/${chunks.length}`, { length: chunk.length });
+      }
+
+      const chunkResult = await withRetryAndCircuitBreaker(
+        'aws-polly',
+        async () => {
+          return this.synthesizeChunk(chunk, voiceConfig);
+        },
+        { maxAttempts: 3, initialDelayMs: 1000 },
+        { failureThreshold: 5, timeout: 60000 }
+      );
+
+      audioBuffers.push(chunkResult.audioBuffer);
+
+      // Adjust timings for this chunk
+      const adjustedTimings = chunkResult.wordTimings.map(t => ({
+        ...t,
+        startTime: t.startTime + totalDuration,
+        endTime: t.endTime + totalDuration,
+      }));
+      allWordTimings.push(...adjustedTimings);
+
+      totalDuration += chunkResult.duration;
+    }
+
+    return {
+      audioBuffer: Buffer.concat(audioBuffers),
+      duration: totalDuration,
+      wordTimings: allWordTimings,
+    };
+  }
+
+  /**
+   * Synthesize a single chunk of text
+   */
+  private async synthesizeChunk(text: string, voiceConfig: LectureAgent['voice']): Promise<TTSResult> {
+    try {
+      // Build synthesis parameters
+      const params: any = {
+        Text: text,
+        OutputFormat: 'mp3',
+        VoiceId: voiceConfig.voiceId,
+        Engine: this.engine,
+      };
+
+      // Add engine-specific parameters
+      if (this.engine === 'generative') {
+        logger.info('Using generative engine (word timings will be estimated)');
+      } else if (this.engine === 'long-form') {
+        // Long-form can use speech marks with JSON output for timings, but not with MP3 directly
+        // The SpeechMarkTypes are explicitly added for the separate JSON timing request below.
+        // This 'else if' branch will remain empty for MP3 parameters as SpeechMarkTypes should not be here.
+      } else {
+        // Neural and standard engines also handle SpeechMarkTypes separately for JSON output.
+        // This 'else' branch will remain empty for MP3 parameters as SpeechMarkTypes should not be here.
+      }
+
+      // Get audio stream
+      const audioResult = await this.polly.synthesizeSpeech(params).promise();
+      const audioBuffer = audioResult.AudioStream as Buffer;
+
+      let wordTimings: WordTiming[] = [];
+      let duration = 0;
+
+      // Get word timing marks (if supported by engine)
+      // We attempt this for all engines. If it fails (e.g. not supported), we fall back to estimation.
+      try {
+        const timingParams = {
+          Text: text,
+          OutputFormat: 'json',
+          VoiceId: voiceConfig.voiceId,
+          Engine: 'standard', // Speech marks only work with standard engine, not neural
+          SpeechMarkTypes: ['word'],
+        };
+        const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
+        const timingData = timingResult.AudioStream.toString('utf-8');
+
+        const lines = timingData.split('\n').filter((line: string) => line.trim());
+
+        for (const line of lines) {
+          try {
+            const mark = JSON.parse(line);
+            if (mark.type === 'word') {
+              wordTimings.push({
+                word: mark.value,
+                startTime: mark.time / 1000,
+                endTime: (mark.time + (mark.duration || 0)) / 1000,
+                scriptBlockId: 'unknown',
+              });
+            }
+          } catch (e) {
+            logger.warn('Failed to parse timing mark', { line: line as string });
           }
+        }
 
-          // Get audio stream
-          const audioResult = await this.polly.synthesizeSpeech(params).promise();
-          const audioBuffer = audioResult.AudioStream as Buffer;
+        duration = wordTimings.length > 0
+          ? wordTimings[wordTimings.length - 1].endTime
+          : 0;
+      } catch (timingError) {
+        logger.warn('Failed to get word timings, will estimate', { error: timingError });
+      }
 
-          let wordTimings: WordTiming[] = [];
-          let duration = 0;
+      // Estimate timings if missing
+      if (wordTimings.length === 0) {
+        wordTimings = this.estimateWordTimings(text, voiceConfig.speed);
+        duration = wordTimings.length > 0
+          ? wordTimings[wordTimings.length - 1].endTime
+          : 0;
+      }
 
-          // Get word timing marks (if supported by engine)
-          if (this.engine !== 'generative') {
-            try {
-              const timingParams = {
-                ...params,
-                OutputFormat: 'json',
-              };
-              const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
-              const timingData = timingResult.AudioStream.toString('utf-8');
+      return {
+        audioBuffer,
+        duration,
+        wordTimings,
+      };
+    } catch (error) {
+      logger.error('AWS Polly synthesis failed', { error });
+      throw new ExternalServiceError(
+        `TTS synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
+        'aws-polly',
+        { error }
+      );
+    }
+  }
 
-              // Parse timing marks (each line is a JSON object)
-              const lines = timingData.split('\n').filter((line: string) => line.trim());
+  /**
+   * Split text into chunks that respect AWS Polly limits (3000 chars)
+   * Uses safe margin of 2800 chars and splits on sentence boundaries
+   */
+  private chunkText(text: string): string[] {
+    const MAX_LENGTH = 2800; // Safe margin below 3000
+    if (text.length <= MAX_LENGTH) return [text];
 
-              for (const line of lines) {
-                try {
-                  const mark = JSON.parse(line);
-                  if (mark.type === 'word') {
-                    wordTimings.push({
-                      word: mark.value,
-                      startTime: mark.time / 1000, // Convert ms to seconds
-                      endTime: (mark.time + (mark.duration || 0)) / 1000,
-                      scriptBlockId: 'unknown', // Will be set later
-                    });
-                  }
-                } catch (e) {
-                  logger.warn('Failed to parse timing mark', { line: line as string });
-                }
-              }
+    const chunks: string[] = [];
+    let currentChunk = '';
 
-              // Calculate duration from last word timing
-              duration = wordTimings.length > 0
-                ? wordTimings[wordTimings.length - 1].endTime
-                : 0;
-            } catch (timingError) {
-              logger.warn('Failed to get word timings, will estimate', { error: timingError });
-              // Fall through to estimation
+    // Split by sentence boundaries (roughly)
+    // Matches period/exclamation/question followed by space or newline, or just newline
+    const sentences = text.match(/[^.!?\n]+([.!?\n]+|$)/g) || [text];
+
+    for (const sentence of sentences) {
+      // If adding this sentence exceeds limit
+      if ((currentChunk + sentence).length > MAX_LENGTH) {
+        // If current chunk has content, push it
+        if (currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = '';
+        }
+
+        // If the sentence itself is massive (rare), strict split by words
+        if (sentence.length > MAX_LENGTH) {
+          const words = sentence.split(' ');
+          for (const word of words) {
+            if ((currentChunk + ' ' + word).length > MAX_LENGTH) {
+              chunks.push(currentChunk.trim());
+              currentChunk = word;
+            } else {
+              currentChunk = currentChunk ? currentChunk + ' ' + word : word;
             }
           }
-
-          // If we don't have timings (generative engine or timing fetch failed), estimate them
-          if (wordTimings.length === 0) {
-            logger.info('Estimating word timings based on voice speed');
-            wordTimings = this.estimateWordTimings(text, voiceConfig.speed);
-            duration = wordTimings.length > 0
-              ? wordTimings[wordTimings.length - 1].endTime
-              : 0;
-          }
-
-          return {
-            audioBuffer,
-            duration,
-            wordTimings,
-          };
-        } catch (error) {
-          logger.error('AWS Polly synthesis failed', { error });
-          throw new ExternalServiceError(
-            `TTS synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
-            'aws-polly',
-            { error }
-          );
+        } else {
+          currentChunk = sentence;
         }
-      },
-      { maxAttempts: 3, initialDelayMs: 1000 },
-      { failureThreshold: 5, timeout: 60000 }
-    );
+      } else {
+        currentChunk += sentence;
+      }
+    }
+
+    if (currentChunk.trim().length > 0) {
+      chunks.push(currentChunk.trim());
+    }
+
+    return chunks;
   }
 
   /**
