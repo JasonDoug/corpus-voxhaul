@@ -2,7 +2,7 @@
 import * as fc from 'fast-check';
 import { uploadHandler } from '../functions/upload';
 import { analyzerHandler } from '../functions/analyzer';
-import { segmenterHandler } from '../functions/segmenter';
+
 import { scriptHandler } from '../functions/script';
 import { audioHandler } from '../functions/audio';
 import { statusHandler } from '../functions/status';
@@ -25,13 +25,13 @@ import { statusHandler } from '../functions/status';
 describe('Property 35: Local-serverless interface compatibility', () => {
   // Generator for job IDs
   const jobIdArb = fc.uuid();
-  
+
   // Generator for agent IDs
   const agentIdArb = fc.uuid();
-  
+
   // Generator for filenames
   const filenameArb = fc.string({ minLength: 1, maxLength: 50 }).map(s => `${s}.pdf`);
-  
+
   /**
    * Test that all serverless handlers follow the Lambda response format
    */
@@ -44,20 +44,20 @@ describe('Property 35: Local-serverless interface compatibility', () => {
           const statusEvent = {
             pathParameters: { jobId },
           };
-          
+
           const statusResult = await statusHandler(statusEvent);
-          
+
           // Verify Lambda response format
           expect(statusResult).toHaveProperty('statusCode');
           expect(statusResult).toHaveProperty('body');
           expect(typeof statusResult.statusCode).toBe('number');
           expect(typeof statusResult.body).toBe('string');
-          
+
           // Verify body is valid JSON
           expect(() => JSON.parse(statusResult.body)).not.toThrow();
-          
+
           const parsedBody = JSON.parse(statusResult.body);
-          
+
           // Status handler should return either job data or error
           if (statusResult.statusCode === 200) {
             expect(parsedBody).toHaveProperty('jobId');
@@ -71,7 +71,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 100 }
     );
   });
-  
+
   /**
    * Test that upload handler accepts the correct event structure
    */
@@ -87,18 +87,18 @@ describe('Property 35: Local-serverless interface compatibility', () => {
             filename,
             agentId,
           };
-          
+
           const result = await uploadHandler(event);
-          
+
           // Verify Lambda response format
           expect(result).toHaveProperty('statusCode');
           expect(result).toHaveProperty('body');
           expect(typeof result.statusCode).toBe('number');
           expect(typeof result.body).toBe('string');
-          
+
           // Verify body is valid JSON
           const parsedBody = JSON.parse(result.body);
-          
+
           // Should return either success or error
           if (result.statusCode === 200) {
             expect(parsedBody).toHaveProperty('jobId');
@@ -112,7 +112,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 50 }
     );
   });
-  
+
   /**
    * Test that analyzer handler accepts jobId in event
    */
@@ -122,18 +122,18 @@ describe('Property 35: Local-serverless interface compatibility', () => {
         jobIdArb,
         async (jobId) => {
           const event = { jobId };
-          
+
           const result = await analyzerHandler(event);
-          
+
           // Verify Lambda response format
           expect(result).toHaveProperty('statusCode');
           expect(result).toHaveProperty('body');
           expect(typeof result.statusCode).toBe('number');
           expect(typeof result.body).toBe('string');
-          
+
           // Verify body is valid JSON
           const parsedBody = JSON.parse(result.body);
-          
+
           // Should return error (job won't exist) but in correct format
           expect(parsedBody).toHaveProperty('error');
           expect(parsedBody).toHaveProperty('code');
@@ -142,37 +142,9 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 100 }
     );
   });
-  
-  /**
-   * Test that segmenter handler accepts jobId in event
-   */
-  it('should accept segmenter event with jobId', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        jobIdArb,
-        async (jobId) => {
-          const event = { jobId };
-          
-          const result = await segmenterHandler(event);
-          
-          // Verify Lambda response format
-          expect(result).toHaveProperty('statusCode');
-          expect(result).toHaveProperty('body');
-          expect(typeof result.statusCode).toBe('number');
-          expect(typeof result.body).toBe('string');
-          
-          // Verify body is valid JSON
-          const parsedBody = JSON.parse(result.body);
-          
-          // Should return error (job won't exist) but in correct format
-          expect(parsedBody).toHaveProperty('error');
-          expect(parsedBody).toHaveProperty('code');
-        }
-      ),
-      { numRuns: 100 }
-    );
-  });
-  
+
+
+
   /**
    * Test that script handler accepts jobId and optional agentId in event
    */
@@ -183,18 +155,18 @@ describe('Property 35: Local-serverless interface compatibility', () => {
         fc.option(agentIdArb, { nil: undefined }),
         async (jobId, agentId) => {
           const event = { jobId, agentId };
-          
+
           const result = await scriptHandler(event);
-          
+
           // Verify Lambda response format
           expect(result).toHaveProperty('statusCode');
           expect(result).toHaveProperty('body');
           expect(typeof result.statusCode).toBe('number');
           expect(typeof result.body).toBe('string');
-          
+
           // Verify body is valid JSON
           const parsedBody = JSON.parse(result.body);
-          
+
           // Should return error (job won't exist) but in correct format
           expect(parsedBody).toHaveProperty('error');
           expect(parsedBody).toHaveProperty('code');
@@ -203,7 +175,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 100 }
     );
   });
-  
+
   /**
    * Test that audio handler accepts jobId in event
    */
@@ -213,18 +185,18 @@ describe('Property 35: Local-serverless interface compatibility', () => {
         jobIdArb,
         async (jobId) => {
           const event = { jobId };
-          
+
           const result = await audioHandler(event);
-          
+
           // Verify Lambda response format
           expect(result).toHaveProperty('statusCode');
           expect(result).toHaveProperty('body');
           expect(typeof result.statusCode).toBe('number');
           expect(typeof result.body).toBe('string');
-          
+
           // Verify body is valid JSON
           const parsedBody = JSON.parse(result.body);
-          
+
           // Should return error (job won't exist) but in correct format
           expect(parsedBody).toHaveProperty('error');
           expect(parsedBody).toHaveProperty('code');
@@ -233,7 +205,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 100 }
     );
   });
-  
+
   /**
    * Test that status handler accepts pathParameters with jobId
    */
@@ -245,18 +217,18 @@ describe('Property 35: Local-serverless interface compatibility', () => {
           const event = {
             pathParameters: { jobId },
           };
-          
+
           const result = await statusHandler(event);
-          
+
           // Verify Lambda response format
           expect(result).toHaveProperty('statusCode');
           expect(result).toHaveProperty('body');
           expect(typeof result.statusCode).toBe('number');
           expect(typeof result.body).toBe('string');
-          
+
           // Verify body is valid JSON
           const parsedBody = JSON.parse(result.body);
-          
+
           // Should return error (job won't exist) but in correct format
           expect(parsedBody).toHaveProperty('error');
           expect(parsedBody).toHaveProperty('code');
@@ -266,7 +238,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 100 }
     );
   });
-  
+
   /**
    * Test that all handlers return consistent error format
    */
@@ -278,23 +250,23 @@ describe('Property 35: Local-serverless interface compatibility', () => {
           // Test multiple handlers with non-existent job
           const handlers = [
             { name: 'analyzer', handler: analyzerHandler, event: { jobId } },
-            { name: 'segmenter', handler: segmenterHandler, event: { jobId } },
+
             { name: 'script', handler: scriptHandler, event: { jobId } },
             { name: 'audio', handler: audioHandler, event: { jobId } },
             { name: 'status', handler: statusHandler, event: { pathParameters: { jobId } } },
           ];
-          
+
           for (const { handler, event } of handlers) {
             const result = await handler(event);
-            
+
             // All should return error format
             expect(result.statusCode).toBeGreaterThanOrEqual(400);
-            
+
             const parsedBody = JSON.parse(result.body);
             expect(parsedBody).toHaveProperty('error');
             expect(parsedBody).toHaveProperty('code');
             expect(parsedBody).toHaveProperty('retryable');
-            
+
             expect(typeof parsedBody.error).toBe('string');
             expect(typeof parsedBody.code).toBe('string');
             expect(typeof parsedBody.retryable).toBe('boolean');
@@ -304,7 +276,7 @@ describe('Property 35: Local-serverless interface compatibility', () => {
       { numRuns: 50 }
     );
   });
-  
+
   /**
    * Test that response status codes are valid HTTP codes
    */
@@ -315,19 +287,19 @@ describe('Property 35: Local-serverless interface compatibility', () => {
         async (jobId) => {
           const handlers = [
             { handler: analyzerHandler, event: { jobId } },
-            { handler: segmenterHandler, event: { jobId } },
+
             { handler: scriptHandler, event: { jobId } },
             { handler: audioHandler, event: { jobId } },
             { handler: statusHandler, event: { pathParameters: { jobId } } },
           ];
-          
+
           for (const { handler, event } of handlers) {
             const result = await handler(event);
-            
+
             // Status code should be a valid HTTP code (100-599)
             expect(result.statusCode).toBeGreaterThanOrEqual(100);
             expect(result.statusCode).toBeLessThan(600);
-            
+
             // For our error cases, should be 4xx or 5xx
             expect(result.statusCode).toBeGreaterThanOrEqual(400);
           }

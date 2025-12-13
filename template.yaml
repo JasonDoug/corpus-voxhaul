@@ -4,7 +4,7 @@ Description: PDF Lecture Service - Serverless application for converting scienti
 
 Globals:
   Function:
-    Runtime: nodejs18.x
+    Runtime: nodejs20.x
     MemorySize: 1024
     Timeout: 300
     Environment:
@@ -87,24 +87,14 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
       Auth:
-        ApiKeyRequired: true
+        ApiKeyRequired: false
 
   # Lambda Functions
   UploadFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/upload.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/upload.uploadHandler
+      CodeUri: dist/functions/
+      Handler: upload.uploadHandler
       Description: Accepts PDF uploads and initiates processing pipeline
       Timeout: 60
       Policies:
@@ -128,6 +118,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /upload
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   # PDF Processing Layer (pypdfium2)
   PdfLayer:
@@ -151,6 +143,7 @@ Resources:
       MemorySize: 2048
       Layers:
         - !Ref PdfLayer
+
       Environment:
         Variables:
           S3_BUCKET_PDFS: !Ref PDFBucket
@@ -175,17 +168,9 @@ Resources:
 
   AnalyzerFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/analyzer.ts
     Properties:
-      CodeUri: ./
-      Handler: src/functions/analyzer.analyzerHandler
+      CodeUri: dist/functions/
+      Handler: analyzer.analyzerHandler
       Description: Analyzes PDF content and extracts all elements (Vision First Enabled - v2)
       Timeout: 300
       MemorySize: 2048
@@ -215,63 +200,16 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /analyze/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
-  SegmenterFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/segmenter.ts
-        External:
-          - canvas
-    Properties:
-      CodeUri: ./
-      Handler: src/functions/segmenter.segmenterHandler
-      Description: Segments content into logical topics
-      Timeout: 300
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ContentTable
-        - EventBridgePutEventsPolicy:
-            EventBusName: !Ref EventBus
-      Events:
-        SegmentEvent:
-          Type: EventBridgeRule
-          Properties:
-            EventBusName: !Ref EventBus
-            Pattern:
-              source:
-                - pdf-lecture-service
-              detail-type:
-                - AnalysisCompleted
-        SegmentApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /segment/{jobId}
-            Method: POST
+
 
   ScriptFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/script.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/script.scriptHandler
+      CodeUri: dist/functions/
+      Handler: script.scriptHandler
       Description: Generates lecture script with personality
       Timeout: 300
       Policies:
@@ -299,22 +237,14 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /script/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   AudioFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/audio.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/audio.audioHandler
+      CodeUri: dist/functions/
+      Handler: audio.audioHandler
       Description: Synthesizes audio from lecture script
       Timeout: 600
       MemorySize: 2048
@@ -350,22 +280,14 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /audio/{jobId}
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   StatusFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/status.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/status.statusHandler
+      CodeUri: dist/functions/
+      Handler: status.statusHandler
       Description: Queries job status
       Timeout: 30
       MemorySize: 1024
@@ -379,22 +301,14 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /status/{jobId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   PlaybackFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/status.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/status.playbackHandler
+      CodeUri: dist/functions/
+      Handler: status.playbackHandler
       Description: API endpoint for retrieving lecture playback data
       Timeout: 30
       MemorySize: 1024
@@ -414,22 +328,14 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /playback/{jobId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   AgentsFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        EntryPoints:
-          - src/functions/agents.ts
-        External:
-          - canvas
     Properties:
-      CodeUri: ./
-      Handler: src/functions/agents.agentsHandler
+      CodeUri: dist/functions/
+      Handler: agents.agentsHandler
       Description: Manages lecture agents (CRUD operations)
       Timeout: 30
       MemorySize: 1024
@@ -452,30 +358,40 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /agents
             Method: GET
+            Auth:
+              ApiKeyRequired: true
         CreateAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents
             Method: POST
+            Auth:
+              ApiKeyRequired: true
         GetAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
         UpdateAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: PUT
+            Auth:
+              ApiKeyRequired: true
         DeleteAgentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /agents/{agentId}
             Method: DELETE
+            Auth:
+              ApiKeyRequired: true
 
   # DynamoDB Tables
   JobsTable:
@@ -649,11 +565,7 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${AnalyzerFunction}'
       RetentionInDays: 30
 
-  SegmenterFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${SegmenterFunction}'
-      RetentionInDays: 30
+
 
   ScriptFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -702,16 +614,7 @@ Resources:
           MetricValue: '1'
           DefaultValue: 0
 
-  SegmenterErrorMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref SegmenterFunctionLogGroup
-      FilterPattern: '{ $.level = "ERROR" }'
-      MetricTransformations:
-        - MetricName: SegmenterErrors
-          MetricNamespace: PDFLectureService
-          MetricValue: '1'
-          DefaultValue: 0
+
 
   ScriptErrorMetricFilter:
     Type: AWS::Logs::MetricFilter

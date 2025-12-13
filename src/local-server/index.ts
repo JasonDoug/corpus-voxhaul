@@ -10,7 +10,7 @@ import DOMMatrix from '@thednp/dommatrix';
 (global as any).DOMMatrix = DOMMatrix;
 
 (global as any).Path2D = class Path2D {
-  constructor() {}
+  constructor() { }
 };
 
 const app = express();
@@ -48,11 +48,11 @@ app.use(express.static('public'));
 app.post('/api/upload', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { uploadHandler } = await import('../functions/upload');
-    
+
     // Extract file from request
     // In a real implementation, this would use multer or similar for file uploads
     // For now, we expect the file to be in req.body
-    
+
     // Convert file data to Buffer if needed
     let fileBuffer: Buffer;
     if (Buffer.isBuffer(req.body.file)) {
@@ -66,13 +66,13 @@ app.post('/api/upload', async (req: Request, res: Response, next: NextFunction) 
     } else {
       throw new Error('Invalid file format');
     }
-    
+
     const event = {
       file: fileBuffer,
       filename: req.body.filename,
       agentId: req.body.agentId,
     };
-    
+
     const result = await uploadHandler(event);
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (error) {
@@ -84,11 +84,11 @@ app.post('/api/upload', async (req: Request, res: Response, next: NextFunction) 
 app.post('/api/analyze/:jobId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { analyzerHandler } = await import('../functions/analyzer');
-    
+
     const event = {
       jobId: req.params.jobId,
     };
-    
+
     const result = await analyzerHandler(event);
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (error) {
@@ -96,65 +96,7 @@ app.post('/api/analyze/:jobId', async (req: Request, res: Response, next: NextFu
   }
 });
 
-// POST /api/segment/:jobId - Segmentation function wrapper
-app.post('/api/segment/:jobId', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // Import segmenter service
-    const { segmentContent } = await import('../services/segmenter');
-    const { getJob, updateJob } = await import('../services/dynamodb');
-    
-    const jobId = req.params.jobId;
-    
-    // Get the job
-    const job = await getJob(jobId);
-    if (!job) {
-      res.status(404).json({
-        error: `Job not found: ${jobId}`,
-        code: 'JOB_NOT_FOUND',
-        retryable: false,
-      });
-      return;
-    }
-    
-    // Update job status to 'segmenting'
-    await updateJob(jobId, {
-      status: 'segmenting',
-      stages: job.stages.map(stage =>
-        stage.stage === 'segmentation'
-          ? { ...stage, status: 'in_progress', startedAt: new Date() }
-          : stage
-      ),
-    });
-    
-    // Segment the content
-    const segmentedContent = await segmentContent(jobId);
-    
-    // Update job status to 'generating_script'
-    await updateJob(jobId, {
-      status: 'generating_script',
-      stages: job.stages.map(stage => {
-        if (stage.stage === 'segmentation') {
-          return { ...stage, status: 'completed', completedAt: new Date() };
-        }
-        if (stage.stage === 'script_generation') {
-          return { ...stage, status: 'in_progress', startedAt: new Date() };
-        }
-        return stage;
-      }),
-    });
-    
-    res.status(200).json({
-      jobId,
-      status: 'generating_script',
-      message: 'Content segmentation completed',
-      segmentedContent: {
-        segments: segmentedContent.segments.length,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+
 
 // POST /api/script/:jobId - Script generation function wrapper
 app.post('/api/script/:jobId', async (req: Request, res: Response, next: NextFunction) => {
@@ -162,10 +104,10 @@ app.post('/api/script/:jobId', async (req: Request, res: Response, next: NextFun
     // Import script generator service
     const { generateScript } = await import('../services/script-generator');
     const { getJob, updateJob } = await import('../services/dynamodb');
-    
+
     const jobId = req.params.jobId;
     const agentId = req.body.agentId; // Optional agent ID override
-    
+
     // Get the job
     const job = await getJob(jobId);
     if (!job) {
@@ -176,7 +118,7 @@ app.post('/api/script/:jobId', async (req: Request, res: Response, next: NextFun
       });
       return;
     }
-    
+
     // Update job status to 'generating_script'
     await updateJob(jobId, {
       status: 'generating_script',
@@ -186,10 +128,10 @@ app.post('/api/script/:jobId', async (req: Request, res: Response, next: NextFun
           : stage
       ),
     });
-    
+
     // Generate the script
     const lectureScript = await generateScript(jobId, agentId);
-    
+
     // Update job status to 'synthesizing_audio'
     await updateJob(jobId, {
       status: 'synthesizing_audio',
@@ -203,7 +145,7 @@ app.post('/api/script/:jobId', async (req: Request, res: Response, next: NextFun
         return stage;
       }),
     });
-    
+
     res.status(200).json({
       jobId,
       status: 'synthesizing_audio',
@@ -224,9 +166,9 @@ app.post('/api/audio/:jobId', async (req: Request, res: Response, next: NextFunc
     // Import audio synthesizer service
     const { synthesizeAudio } = await import('../services/audio-synthesizer');
     const { getJob, updateJob } = await import('../services/dynamodb');
-    
+
     const jobId = req.params.jobId;
-    
+
     // Get the job
     const job = await getJob(jobId);
     if (!job) {
@@ -237,7 +179,7 @@ app.post('/api/audio/:jobId', async (req: Request, res: Response, next: NextFunc
       });
       return;
     }
-    
+
     // Update job status to 'synthesizing_audio'
     await updateJob(jobId, {
       status: 'synthesizing_audio',
@@ -247,12 +189,12 @@ app.post('/api/audio/:jobId', async (req: Request, res: Response, next: NextFunc
           : stage
       ),
     });
-    
+
     // Synthesize the audio
     const audioOutput = await synthesizeAudio(jobId);
-    
+
     // Job status is updated to 'completed' by synthesizeAudio
-    
+
     res.status(200).json({
       jobId,
       status: 'completed',
@@ -272,13 +214,13 @@ app.post('/api/audio/:jobId', async (req: Request, res: Response, next: NextFunc
 app.get('/api/status/:jobId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { statusHandler } = await import('../functions/status');
-    
+
     const event = {
       pathParameters: {
         jobId: req.params.jobId,
       },
     };
-    
+
     const result = await statusHandler(event);
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (error) {
@@ -290,7 +232,7 @@ app.get('/api/status/:jobId', async (req: Request, res: Response, next: NextFunc
 app.get('/api/agents', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const { listAgents } = await import('../services/agent');
-    
+
     const agents = await listAgents();
     res.status(200).json({ agents });
   } catch (error) {
@@ -302,10 +244,10 @@ app.get('/api/agents', async (_req: Request, res: Response, next: NextFunction) 
 app.post('/api/agents', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { createAgent } = await import('../services/agent');
-    
+
     const agentData = req.body;
     const agent = await createAgent(agentData);
-    
+
     res.status(201).json(agent);
   } catch (error) {
     // Handle validation errors with 400 status
@@ -325,9 +267,9 @@ app.post('/api/agents', async (req: Request, res: Response, next: NextFunction) 
 app.get('/api/agents/:agentId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { getAgent } = await import('../services/agent');
-    
+
     const agent = await getAgent(req.params.agentId);
-    
+
     if (!agent) {
       res.status(404).json({
         error: `Agent not found: ${req.params.agentId}`,
@@ -336,7 +278,7 @@ app.get('/api/agents/:agentId', async (req: Request, res: Response, next: NextFu
       });
       return;
     }
-    
+
     res.status(200).json(agent);
   } catch (error) {
     next(error);
@@ -347,10 +289,10 @@ app.get('/api/agents/:agentId', async (req: Request, res: Response, next: NextFu
 app.put('/api/agents/:agentId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { updateAgent } = await import('../services/agent');
-    
+
     const updates = req.body;
     const agent = await updateAgent(req.params.agentId, updates);
-    
+
     res.status(200).json(agent);
   } catch (error) {
     // Handle validation errors with 400 status
@@ -370,9 +312,9 @@ app.put('/api/agents/:agentId', async (req: Request, res: Response, next: NextFu
 app.delete('/api/agents/:agentId', async (req: Request, _res: Response, next: NextFunction) => {
   try {
     const { deleteAgent } = await import('../services/agent');
-    
+
     await deleteAgent(req.params.agentId);
-    
+
     // Send 204 No Content
     _res.status(204).send();
   } catch (error) {
@@ -389,11 +331,11 @@ app.get('/api/player/:jobId', (_req: Request, res: Response) => {
 app.get('/api/playback/:jobId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { jobId } = req.params;
-    
+
     // Import dynamically to avoid circular dependencies
     const { getPlaybackData } = await import('../services/status');
     const playbackData = await getPlaybackData(jobId);
-    
+
     res.json(playbackData);
   } catch (error) {
     next(error);
