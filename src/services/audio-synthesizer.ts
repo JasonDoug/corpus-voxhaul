@@ -85,12 +85,12 @@ export class MockTTSProvider implements TTSProvider {
  * - standard: Basic quality, fast (all voices available)
  */
 export class PollyTTSProvider implements TTSProvider {
-  private polly: any; // AWS.Polly instance
+  private polly: any; // PollyClient instance
   private engine: string;
 
   constructor() {
     // Initialize AWS Polly client
-    const AWS = require('aws-sdk');
+    const { PollyClient } = require('@aws-sdk/client-polly');
     const { config } = require('../utils/config');
 
     const pollyConfig: any = {
@@ -101,11 +101,13 @@ export class PollyTTSProvider implements TTSProvider {
     // Explicitly setting credentials here is only needed for local development if not using
     // default AWS CLI profile, or if config.localMode is enabled and explicit keys are provided.
     if (config.localstack.useLocalStack && config.aws.accessKeyId && config.aws.secretAccessKey) {
-      pollyConfig.accessKeyId = config.aws.accessKeyId;
-      pollyConfig.secretAccessKey = config.aws.secretAccessKey;
+      pollyConfig.credentials = {
+        accessKeyId: config.aws.accessKeyId,
+        secretAccessKey: config.aws.secretAccessKey,
+      };
     }
 
-    this.polly = new AWS.Polly(pollyConfig);
+    this.polly = new PollyClient(pollyConfig);
 
     // Get engine from environment (generative, long-form, neural, standard)
     this.engine = process.env.POLLY_ENGINE || 'neural';
@@ -172,6 +174,8 @@ export class PollyTTSProvider implements TTSProvider {
    */
   private async synthesizeChunk(text: string, voiceConfig: LectureAgent['voice']): Promise<TTSResult> {
     try {
+      const { SynthesizeSpeechCommand } = require('@aws-sdk/client-polly');
+      
       // Build synthesis parameters
       const params: any = {
         Text: text,
@@ -193,8 +197,15 @@ export class PollyTTSProvider implements TTSProvider {
       }
 
       // Get audio stream
-      const audioResult = await this.polly.synthesizeSpeech(params).promise();
-      const audioBuffer = audioResult.AudioStream as Buffer;
+      const audioCommand = new SynthesizeSpeechCommand(params);
+      const audioResult = await this.polly.send(audioCommand);
+      
+      // Convert stream to buffer
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of audioResult.AudioStream as any) {
+        chunks.push(chunk);
+      }
+      const audioBuffer = Buffer.concat(chunks);
 
       let wordTimings: WordTiming[] = [];
       let duration = 0;
@@ -204,13 +215,20 @@ export class PollyTTSProvider implements TTSProvider {
       try {
         const timingParams = {
           Text: text,
-          OutputFormat: 'json',
+          OutputFormat: 'json' as const,
           VoiceId: voiceConfig.voiceId,
-          Engine: 'standard', // Speech marks only work with standard engine, not neural
-          SpeechMarkTypes: ['word'],
+          Engine: 'standard' as const, // Speech marks only work with standard engine, not neural
+          SpeechMarkTypes: ['word' as const],
         };
-        const timingResult = await this.polly.synthesizeSpeech(timingParams).promise();
-        const timingData = timingResult.AudioStream.toString('utf-8');
+        const timingCommand = new SynthesizeSpeechCommand(timingParams);
+        const timingResult = await this.polly.send(timingCommand);
+        
+        // Convert timing stream to string
+        const timingChunks: Uint8Array[] = [];
+        for await (const chunk of timingResult.AudioStream as any) {
+          timingChunks.push(chunk);
+        }
+        const timingData = Buffer.concat(timingChunks).toString('utf-8');
 
         const lines = timingData.split('\n').filter((line: string) => line.trim());
 
