@@ -6,8 +6,7 @@ import { ContentSegment, Figure, Table, Formula } from '../models/content';
 import { LectureScript, ScriptSegment, ScriptBlock } from '../models/script';
 import { llmService, getRecommendedModel } from './llm';
 import { recordLLMCallMetrics } from '../utils/llm-metrics';
-
-const { v4: uuidv4 } = require('uuid');
+import * as crypto from 'crypto';
 
 /**
  * Create base prompt for explaining scientific concepts accessibly
@@ -16,7 +15,7 @@ export function createBasePrompt(): string {
   return `Your core objectives are to:
 1. Simplify complex scientific concepts into accessible language.
 2. Ensure the content is engaging and easily digestible for a general audience.
-3. Verbally describe all visual elements (figures, tables, formulas).
+3. IF visual elements (figures, tables, formulas) are provided, verbally describe them. If not provided, do NOT invent or assume their existence.
 4. Maintain scientific accuracy while simplifying explanations.
 5. Create a natural, conversational flow suitable for audio narration.
 
@@ -25,10 +24,11 @@ General guidelines:
 - Define technical terms when first introduced.
 - Explain the significance and implications of findings.
 - Connect ideas to show how concepts relate to each other.
-- For figures: Describe what is shown, key patterns, and what it means.
-- For tables: Summarize the data and highlight important trends or comparisons.
-- For formulas: Explain what each variable represents and what the formula tells us.
-- Avoid phrases like "as shown in the figure" - instead describe what the figure shows.
+- ONLY describe visual elements that are explicitly provided in the content.
+- For figures (if provided): Describe what is shown, key patterns, and what it means.
+- For tables (if provided): Summarize the data and highlight important trends or comparisons.
+- For formulas (if provided): Explain what each variable represents and what the formula tells us.
+- Do NOT invent or assume the existence of figures, diagrams, charts, or other visual elements.
 - Write in a natural speaking style, not formal academic writing.
 - Use complete sentences that flow well when read aloud.`;
 }
@@ -135,6 +135,7 @@ export function createSegmentPrompt(
   }
 
   segmentPrompt += `Create an engaging spoken narrative for this specific part of the lecture. Focus ONLY on the content provided for this segment.\n\n`;
+  segmentPrompt += `**CRITICAL CONSTRAINT**: You must ONLY use information explicitly provided in the CONTENT TO COVER section below. Do NOT invent, assume, or reference any visual elements (charts, graphs, diagrams, figures, images, tables) unless they are explicitly described in the content. Even if your personality would normally reference visuals or "paint pictures," you MUST adhere strictly to the source material.\n\n`;
 
   // Calculate actual word count of the input content for this segment
   let inputContentWordCount = 0;
@@ -183,13 +184,28 @@ export function createSegmentPrompt(
     segmentPrompt += `2. Begin with a suitable opening for the start of a lecture, introducing yourself and the topic if appropriate for the agent's persona.\n`;
   }
   segmentPrompt += `3. Integrate all provided CONTENT TO COVER into a cohesive spoken narrative.\n`;
-  segmentPrompt += `4. Provide clear verbal descriptions for all visual elements listed.\n`;
+  segmentPrompt += `4. IF visual elements (figures, tables, formulas) are explicitly listed in the content, provide clear verbal descriptions. Do NOT invent or reference visual elements that are not provided.\n`;
   segmentPrompt += `5. Maintain your established personality and tone throughout.\n`;
   segmentPrompt += `6. Write in a natural speaking style suitable for audio narration.\n`;
   segmentPrompt += `7. The script should flow smoothly when read aloud.\n`;
-  segmentPrompt += `8. Adhere to the LENGTH GUIDANCE as closely as possible without sacrificing content quality or clarity. Focus on conciseness. Avoid repetition and unnecessary elaboration.\n\n`;
+  segmentPrompt += `8. Adhere to the LENGTH GUIDANCE as closely as possible without sacrificing content quality or clarity. Focus on conciseness. Avoid repetition and unnecessary elaboration.\n`;
+  segmentPrompt += `9. CRITICAL: Base your script ONLY on the text content provided. Do NOT add examples, diagrams, or illustrations that were not in the source material.\n\n`;
 
-  // Continue with rest of function
+  // ADD THE ACTUAL CONTENT
+  segmentPrompt += `${'='.repeat(80)}\n`;
+  segmentPrompt += `SOURCE MATERIAL:\n`;
+  segmentPrompt += `${'='.repeat(80)}\n\n`;
+  
+  // Add only text content blocks (ignore figures, tables, formulas for now)
+  segment.contentBlocks.forEach((block) => {
+    if (block.type === 'text') {
+      segmentPrompt += `${block.content}\n\n`;
+    }
+  });
+  
+  segmentPrompt += `${'='.repeat(80)}\n\n`;
+  segmentPrompt += `Create your lecture script based ONLY on the source material above. Do not add any information not present in the source.\n`;
+
   return personalityPrompt + segmentPrompt;
 }
 
@@ -492,10 +508,11 @@ TONE: ${agent.personality.tone}
 
 GUIDELINES:
 - Explain complex scientific concepts in accessible language
-- Reference figures, tables, and formulas with clear verbal descriptions
+- IF figures, tables, or formulas are provided in the content, describe them clearly. Do NOT invent visual elements.
 - Maintain the specified tone throughout
 - Create a natural, conversational flow
-- Use analogies and examples to clarify difficult concepts`;
+- Use analogies and examples to clarify difficult concepts
+- Base your script strictly on the provided source material`;
 
   // Add tone-specific guidance
   if (agent.personality.tone === 'humorous') {
@@ -580,7 +597,7 @@ async function callScriptGenerationLLM(prompt: string, agent: LectureAgent, corr
   }
 
   const startTime = Date.now();
-  const requestId = correlationId || uuidv4();
+  const requestId = correlationId || crypto.randomUUID();
   let model: string | undefined;
 
   try {
@@ -677,7 +694,7 @@ async function generateScriptForSegment(
   totalSegments: number,
   correlationId?: string
 ): Promise<ScriptSegment> {
-  const requestId = correlationId || uuidv4();
+  const requestId = correlationId || crypto.randomUUID();
 
   logger.info('Generating script for segment', {
     correlationId: requestId,
@@ -729,7 +746,7 @@ async function generateScriptForSegment(
     }
 
     scriptBlocks.push({
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       text: paragraph.trim(),
       contentReference,
     });
@@ -750,7 +767,7 @@ async function generateScriptForSegment(
  * Retrieves segmented content and agent, generates script, and stores the result
  */
 export async function generateScript(jobId: string, agentId?: string): Promise<LectureScript> {
-  const correlationId = `script-${jobId}-${uuidv4()}`;
+  const correlationId = `script-${jobId}-${crypto.randomUUID()}`;
 
   try {
     logger.info('Starting script generation', {

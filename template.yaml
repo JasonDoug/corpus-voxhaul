@@ -28,7 +28,7 @@ Globals:
         ENABLE_REAL_SCRIPT_GENERATION: 'true'
         ENABLE_REAL_SEGMENTATION: 'false'
         VISION_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
-        LLM_MODEL_SCRIPT: 'tngtech/deepseek-r1t2-chimera:free'
+        LLM_MODEL_SCRIPT: 'meta-llama/llama-3.3-70b-instruct:free'
         TTS_PROVIDER: 'polly'
         POLLY_ENGINE: 'neural'
 
@@ -93,8 +93,8 @@ Resources:
   UploadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: upload.uploadHandler
+      CodeUri: dist/
+      Handler: functions/upload.uploadHandler
       Description: Accepts PDF uploads and initiates processing pipeline
       Timeout: 60
       Policies:
@@ -129,7 +129,7 @@ Resources:
       Description: PDF processing utilities (pypdfium2)
       ContentUri: layers/pdf_layer.zip
       CompatibleRuntimes:
-        - python3.13
+        - python3.12
       RetentionPolicy: Retain
 
   PdfToImagesFunction:
@@ -137,7 +137,7 @@ Resources:
     Properties:
       CodeUri: src/functions/pdf-to-images/
       Handler: app.handler
-      Runtime: python3.13
+      Runtime: python3.12
       Description: Converts PDF pages to images for Vision pipeline
       Timeout: 300
       MemorySize: 2048
@@ -169,8 +169,8 @@ Resources:
   AnalyzerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: analyzer.analyzerHandler
+      CodeUri: dist/
+      Handler: functions/analyzer.analyzerHandler
       Description: Analyzes PDF content and extracts all elements (Vision First Enabled - v2)
       Timeout: 300
       MemorySize: 2048
@@ -208,8 +208,8 @@ Resources:
   ScriptFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: script.scriptHandler
+      CodeUri: dist/
+      Handler: functions/script.scriptHandler
       Description: Generates lecture script with personality
       Timeout: 900
       Policies:
@@ -243,8 +243,8 @@ Resources:
   AudioFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: audio.audioHandler
+      CodeUri: dist/
+      Handler: functions/audio.audioHandler
       Description: Synthesizes audio from lecture script
       Timeout: 600
       MemorySize: 2048
@@ -286,8 +286,8 @@ Resources:
   StatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: status.statusHandler
+      CodeUri: dist/
+      Handler: functions/status.statusHandler
       Description: Queries job status
       Timeout: 30
       MemorySize: 1024
@@ -307,8 +307,8 @@ Resources:
   PlaybackFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: status.playbackHandler
+      CodeUri: dist/
+      Handler: functions/status.playbackHandler
       Description: API endpoint for retrieving lecture playback data
       Timeout: 30
       MemorySize: 1024
@@ -334,8 +334,8 @@ Resources:
   AgentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: dist/functions/
-      Handler: agents.agentsHandler
+      CodeUri: dist/
+      Handler: functions/agents.agentsHandler
       Description: Manages lecture agents (CRUD operations)
       Timeout: 30
       MemorySize: 1024
@@ -498,59 +498,60 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-events'
 
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${AWS::StackName}-frontend-${AWS::AccountId}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
+  # Frontend Resources - Commented out for debugging
+  # FrontendBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub '${AWS::StackName}-frontend-${AWS::AccountId}'
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     WebsiteConfiguration:
+  #       IndexDocument: index.html
+  #       ErrorDocument: index.html
 
-  FrontendDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        DefaultRootObject: index.html
-        Origins:
-          - Id: S3Origin
-            DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${FrontendOAI}'
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS]
-          CachedMethods: [GET, HEAD]
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
+  # FrontendDistribution:
+  #   Type: AWS::CloudFront::Distribution
+  #   Properties:
+  #     DistributionConfig:
+  #       Enabled: true
+  #       DefaultRootObject: index.html
+  #       Origins:
+  #         - Id: S3Origin
+  #           DomainName: !GetAtt FrontendBucket.RegionalDomainName
+  #           S3OriginConfig:
+  #             OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${FrontendOAI}'
+  #       DefaultCacheBehavior:
+  #         TargetOriginId: S3Origin
+  #         ViewerProtocolPolicy: redirect-to-https
+  #         AllowedMethods: [GET, HEAD, OPTIONS]
+  #         CachedMethods: [GET, HEAD]
+  #         ForwardedValues:
+  #           QueryString: false
+  #           Cookies:
+  #             Forward: none
+  #       ViewerCertificate:
+  #         CloudFrontDefaultCertificate: true
 
-  FrontendOAI:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub 'OAI for ${AWS::StackName}'
+  # FrontendOAI:
+  #   Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+  #   Properties:
+  #     CloudFrontOriginAccessIdentityConfig:
+  #       Comment: !Sub 'OAI for ${AWS::StackName}'
 
-  FrontendBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              CanonicalUser: !GetAtt FrontendOAI.S3CanonicalUserId
-            Action: s3:GetObject
-            Resource: !Sub '${FrontendBucket.Arn}/*'
+  # FrontendBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref FrontendBucket
+  #     PolicyDocument:
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             CanonicalUser: !GetAtt FrontendOAI.S3CanonicalUserId
+  #           Action: s3:GetObject
+  #           Resource: !Sub '${FrontendBucket.Arn}/*'
 
   # CloudWatch Log Groups
   UploadFunctionLogGroup:
@@ -778,19 +779,19 @@ Outputs:
     Description: API Gateway endpoint URL
     Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
   
-  FrontendBucket:
-    Description: S3 Bucket for frontend hosting
-    Value: !Ref FrontendBucket
+  # FrontendBucket:
+  #   Description: S3 Bucket for frontend hosting
+  #   Value: !Ref FrontendBucket
   
-  FrontendDistribution:
-    Description: CloudFront Distribution ID
-    Value: !Ref FrontendDistribution
+  # FrontendDistribution:
+  #   Description: CloudFront Distribution ID
+  #   Value: !Ref FrontendDistribution
 
-  FrontendUrl:
-    Description: CloudFront URL for the frontend application
-    Value: !GetAtt FrontendDistribution.DomainName
-    Export:
-      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  # FrontendUrl:
+  #   Description: CloudFront URL for the frontend application
+  #   Value: !GetAtt FrontendDistribution.DomainName
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-ApiEndpoint'
 
   PDFBucketName:
     Description: S3 bucket for PDF storage

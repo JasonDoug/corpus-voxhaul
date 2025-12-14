@@ -15,9 +15,7 @@ import { config } from '../utils/config';
 import { SegmentedContent, ContentSegment } from '../models/content';
 import { llmService } from './llm';
 import { recordLLMCallMetrics } from '../utils/llm-metrics';
-
-// Dynamic imports for modules with ESM/CJS issues
-const { v4: uuidv4 } = require('uuid');
+import * as crypto from 'crypto';
 
 /**
  * Page analysis result from vision LLM
@@ -99,7 +97,7 @@ async function analyzePageWithVision(
   correlationId?: string
 ): Promise<PageAnalysis> {
   const startTime = Date.now();
-  const requestId = correlationId || uuidv4();
+  const requestId = correlationId || crypto.randomUUID();
 
   // Get vision model from environment or use default
   const model = process.env.VISION_MODEL || 'google/gemini-2.0-flash-exp:free';
@@ -123,14 +121,17 @@ Produce the *absolute minimum number of segments* necessary to cover the distinc
 1.  **Consolidate by Topic:** If a topic spans multiple paragraphs, the entire page, or even continues from previous context, create ONLY ONE segment.
 2.  **No Arbitrary Limits:** Do not target a specific number of segments. If the page is one big concept, use 1 segment. If it has 3 distinct, unrelated topics, use 3. **Err heavily on the side of MERGING.**
 3.  **No Sub-Segmentation:** Do NOT create separate segments for definitions, examples, or minor sub-sections. Merge them into the main segment.
-**STEP 1: VISUAL AND TEXTUAL ANALYSIS**
-- Identify all text content, including headings, footnotes, and captions.
-- Identify all diagrams, charts, figures, tables, mathematical formulas, and equations.
-- Identify any explicit citations or references.
+
+**STEP 1: ANALYZE WHAT IS ACTUALLY PRESENT**
+- Extract ALL text content from the page (headings, body text, footnotes, captions).
+- IF the page contains diagrams, charts, figures, tables, mathematical formulas, or equations, describe them accurately.
+- IF the page contains citations or references, include them.
+- ONLY describe visual elements that are actually visible in the image. Do NOT invent or assume content.
 
 **STEP 2: CONCEPTUAL SEGMENT GENERATION**
 - **Consolidate** all related content into the fewest possible segments.
-- For each generated segment, the 'description' field must include **ALL** relevant information from the source material related to that specific segment's topic.
+- For each segment, the 'description' field must contain the actual content from the page.
+- Be factual and precise - describe only what you can see.
 
 ---
 
@@ -143,21 +144,21 @@ Return strictly a JSON object with this schema. Do NOT wrap it in markdown code 
     {
       "id": number,
       "title": "string (A clear title for the concept)",
-      "description": "string (A comprehensive, detailed description of the concept. Include ALL visual context, such as figures, tables, formulas, and citations, converted into clear, educational text.)"
+      "description": "string (A comprehensive description of the content on this page. If visual elements are present, describe them. Otherwise, focus on the text content.)"
     }
   ]
 }
 \`\`\`
 
-**Example of the Output Structure:**
+**Example for a text-only page:**
 
 \`\`\`json
 {
   "segments": [
     {
       "id": 1,
-      "title": "Introduction to Thermodynamics and State Variables",
-      "description": "Explaining the basic definition of thermodynamics and the three primary state variables (Pressure P, Volume V, Temperature T). The diagram visually presented shows a piston cylinder assembly, with 100J of heat entering the system and 60J of work being done by the piston. The key mathematical relation is the Ideal Gas Law: PV = nRT, which relates all three variables. (Source: Smith & Jones, 2021, Ch 2)."
+      "title": "Introduction to Thermodynamics",
+      "description": "This section defines thermodynamics as the study of energy transformations and introduces three primary state variables: Pressure (P), Volume (V), and Temperature (T). The ideal gas law PV = nRT relates these variables for ideal gases."
     }
   ]
 }
@@ -166,9 +167,9 @@ Return strictly a JSON object with this schema. Do NOT wrap it in markdown code 
 IMPORTANT: 
 - Do NOT wrap in markdown code blocks
 - Return ONLY the raw JSON object
+- Be accurate - describe only what is actually visible
+- Do NOT invent diagrams, figures, or other visual elements that are not present
 - Include ALL text content from the page in the descriptions
-- Convert ALL visual elements (figures, tables, formulas) to text descriptions
-- Be comprehensive - don't leave out any content
 `;
 
   try {
@@ -278,7 +279,7 @@ export async function analyzeContentVisionFirst(
   jobId: string,
   correlationId?: string
 ): Promise<SegmentedContent> {
-  const requestId = correlationId || uuidv4();
+  const requestId = correlationId || crypto.randomUUID();
 
   try {
     logger.info('Starting vision-first content analysis', {
@@ -325,7 +326,7 @@ export async function analyzeContentVisionFirst(
         segmentCounter++;
 
         allSegments.push({
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           title: rawSegment.title,
           order: segmentCounter,
           contentBlocks: [
@@ -381,7 +382,7 @@ export async function analyzeContentVisionFirst(
 
 /**
  * Helper to clean and parse JSON from LLM response
- * Handles markdown code blocks, surrounding text, and basic cleanup
+ * Handles markdown code blocks, surrounding text, and unescaped control characters
  */
 function cleanAndParseJson(text: string): any {
   let cleaned = text.trim();
@@ -400,5 +401,39 @@ function cleanAndParseJson(text: string): any {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
   }
 
-  return JSON.parse(cleaned);
+  // 3. Sanitize JSON string to handle unescaped control characters
+  // LLMs sometimes return JSON with unescaped newlines, tabs, etc. in strings
+  let sanitized = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+
+    if (inString) {
+      if (char === '\\') {
+        isEscaped = !isEscaped;
+        sanitized += char;
+      } else if (char === '"' && !isEscaped) {
+        inString = false;
+        sanitized += char;
+      } else if (char === '\n') {
+        sanitized += '\\n'; // Escape newline
+      } else if (char === '\r') {
+        sanitized += '\\r'; // Escape carriage return
+      } else if (char === '\t') {
+        sanitized += '\\t'; // Escape tab
+      } else {
+        isEscaped = false;
+        sanitized += char;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      }
+      sanitized += char;
+    }
+  }
+
+  return JSON.parse(sanitized);
 }

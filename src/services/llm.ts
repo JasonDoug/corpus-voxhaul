@@ -171,6 +171,17 @@ class OpenRouterClient {
         logger.debug('OpenRouter rate limit status', rateLimitHeaders);
       }
       
+      // Validate response structure
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        logger.error('Invalid OpenRouter chat response structure', { data });
+        throw new Error(`Invalid API response: missing choices array. Response: ${JSON.stringify(data)}`);
+      }
+      
+      if (!data.choices[0].message || !data.choices[0].message.content) {
+        logger.error('Invalid OpenRouter chat response content', { data });
+        throw new Error(`Invalid API response: missing message content. Response: ${JSON.stringify(data)}`);
+      }
+      
       const result = {
         content: data.choices[0].message.content,
         model: data.model,
@@ -273,6 +284,17 @@ class OpenRouterClient {
       
       if (rateLimitHeaders.remaining) {
         logger.debug('OpenRouter rate limit status', rateLimitHeaders);
+      }
+      
+      // Validate response structure
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        logger.error('Invalid OpenRouter vision response structure', { data });
+        throw new Error(`Invalid API response: missing choices array. Response: ${JSON.stringify(data)}`);
+      }
+      
+      if (!data.choices[0].message || !data.choices[0].message.content) {
+        logger.error('Invalid OpenRouter vision response content', { data });
+        throw new Error(`Invalid API response: missing message content. Response: ${JSON.stringify(data)}`);
       }
       
       // Record metrics
