@@ -29,7 +29,12 @@ if (config.localstack.useLocalStack) {
 // In Lambda, don't set credentials - they're provided automatically via execution role
 
 const client = new DynamoDBClient(dynamoDBConfig);
-const dynamoDB = DynamoDBDocumentClient.from(client);
+const dynamoDB = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    removeUndefinedValues: true, // Remove undefined values from objects
+    convertClassInstanceToMap: true, // Convert Date objects and other class instances
+  },
+});
 
 // Helper function to handle DynamoDB errors
 function handleDynamoDBError(error: any, operation: string): never {
