@@ -36,17 +36,19 @@ async function extractPagesAsImages(jobId: string): Promise<string[]> {
   try {
     logger.info('Loading page images from S3', { jobId });
 
-    const AWS = require('aws-sdk');
-    const s3 = new AWS.S3();
+    const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
+    const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
 
     const bucket = process.env.S3_BUCKET_PDFS;
     const prefix = `${jobId}_pages/`;
 
     // List all page images for this job
-    const listResponse = await s3.listObjectsV2({
+    const listCommand = new ListObjectsV2Command({
       Bucket: bucket,
       Prefix: prefix,
-    }).promise();
+    });
+    
+    const listResponse = await s3Client.send(listCommand);
 
     if (!listResponse.Contents || listResponse.Contents.length === 0) {
       throw new Error(`No page images found in S3 for job ${jobId}`);
@@ -63,15 +65,26 @@ async function extractPagesAsImages(jobId: string): Promise<string[]> {
       pageCount: imageKeys.length,
     });
 
+    // Helper to convert stream to buffer
+    async function streamToBuffer(stream: any): Promise<Buffer> {
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks);
+    }
+
     // Download each image and convert to base64 data URL
     const imageDataUrls: string[] = [];
     for (const key of imageKeys) {
-      const imageResponse = await s3.getObject({
+      const getCommand = new GetObjectCommand({
         Bucket: bucket,
         Key: key,
-      }).promise();
-
-      const base64 = imageResponse.Body.toString('base64');
+      });
+      
+      const imageResponse = await s3Client.send(getCommand);
+      const buffer = await streamToBuffer(imageResponse.Body);
+      const base64 = buffer.toString('base64');
       imageDataUrls.push(`data:image/png;base64,${base64}`);
     }
 
