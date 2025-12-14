@@ -7,7 +7,7 @@ import { logger } from './logger';
 const cloudwatch = new CloudWatchClient({
   region: config.aws.region,
   ...(config.localstack.useLocalStack && {
-    endpoint: { url: config.localstack.endpoint },
+    endpoint: config.localstack.endpoint,
   }),
 });
 
@@ -134,11 +134,11 @@ export async function createAlarm(params: {
       AlarmName: params.alarmName,
       MetricName: params.metricName,
       Namespace: 'PDFLectureService',
-      Statistic: params.statistic,
+      Statistic: params.statistic as any,
       Period: params.period,
       EvaluationPeriods: params.evaluationPeriods,
       Threshold: params.threshold,
-      ComparisonOperator: params.comparisonOperator,
+      ComparisonOperator: params.comparisonOperator as any,
       Dimensions: dimensions,
       TreatMissingData: 'notBreaching',
     });

@@ -5,7 +5,7 @@ import { logger } from '../utils/logger';
 
 const eventBridge = new EventBridgeClient({
   ...(config.isLocal && {
-    endpoint: { url: 'http://localhost:4566' },
+    endpoint: 'http://localhost:4566',
   }),
   region: config.awsRegion,
 });
