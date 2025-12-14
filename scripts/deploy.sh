@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Default values
 STAGE=${1:-dev}
-REGION=${2:-us-east-1}
+REGION=${2:-us-west-2}
 
 echo -e "${GREEN}PDF Lecture Service Deployment${NC}"
 echo "Stage: $STAGE"
