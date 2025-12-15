@@ -10,6 +10,7 @@ import {
   DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { Readable } from 'stream';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
@@ -19,15 +20,15 @@ import { withRetry } from '../utils/retry';
 // Configure AWS SDK based on environment
 const s3Config: any = {
   region: config.aws.region,
-  forcePathStyle: true, // Required for LocalStack
-  requestHandler: {
+  requestHandler: new NodeHttpHandler({
     requestTimeout: 30000,
     connectionTimeout: 5000,
-  },
+  }),
 };
 
 if (config.localstack.useLocalStack) {
-  s3Config.endpoint = { url: config.localstack.endpoint };
+  s3Config.endpoint = config.localstack.endpoint;
+  s3Config.forcePathStyle = true;
   s3Config.credentials = {
     accessKeyId: 'test',
     secretAccessKey: 'test',
@@ -39,6 +40,9 @@ const s3Client = new S3Client(s3Config);
 
 // Helper function to convert S3 stream to Buffer
 async function streamToBuffer(stream: any): Promise<Buffer> {
+  if (!stream) {
+    throw new Error('Stream is undefined');
+  }
   const chunks: Uint8Array[] = [];
   for await (const chunk of stream) {
     chunks.push(chunk);
@@ -55,7 +59,7 @@ function handleS3Error(error: any, operation: string): never {
     throw new ResourceError(`Storage operation timed out: ${operation}`, { error: error.message });
   }
   
-  if (error.name === 'NoSuchBucket' || error.name === 'NoSuchKey') {
+  if (error.name === 'NoSuchBucket' || error.name === 'NoSuchKey' || error.name === 'NotFound') {
     throw new ResourceError(`Storage resource not found: ${operation}`, { error: error.message });
   }
   

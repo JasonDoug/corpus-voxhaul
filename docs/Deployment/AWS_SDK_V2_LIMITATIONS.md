@@ -1,11 +1,14 @@
 # Architectural Decision Record: AWS SDK v2 Limitations & Workarounds
 
 **Date:** December 14, 2025
-**Status:** Active Workaround
+**Status:** Superseded (Migrated to AWS SDK v3 on December 14, 2025 via PR #7)
 **Context:** Node.js 20.x / Python 3.12 Serverless Environment
 
+## Migration Note
+This document is preserved for historical reference. The project successfully migrated from AWS SDK v2 to v3 on December 14, 2025. All limitations described below have been resolved through the migration. See PR #7 for implementation details.
+
 ## 1. Executive Summary
-This project currently relies on **AWS SDK v2 (`aws-sdk`)**. While functional, this SDK is in maintenance mode and introduces specific architectural friction points in a modern Node.js 20+ Serverless environment.
+This project previously relied on **AWS SDK v2 (`aws-sdk`)**. While functional, this SDK was in maintenance mode and introduced specific architectural friction points in a modern Node.js 20+ Serverless environment.
 
 To maintain stability without a full migration to SDK v3, we implemented specific workarounds regarding **bundle sizes**, **Lambda Layers**, and **ESM/CommonJS compatibility**.
 
@@ -73,14 +76,15 @@ AWS SDK v2 uses loose JSON objects for API calls. Unlike SDK v3, which has stric
 
 ---
 
-## 5. Future Recommendations (Migration Path)
+## 5. Migration Results (Completed December 14, 2025)
 
-To permanently resolve these friction points, the following roadmap is recommended for Q1 2025:
+All friction points documented in this ADR were resolved through migration to AWS SDK v3:
 
-1.  **Migrate to AWS SDK v3:**
-    *   **Modular:** Import *only* what you need (`@aws-sdk/client-s3`, `@aws-sdk/client-dynamodb`). This reduces bundle size from ~40MB to ~3MB.
-    *   **First-Class TypeScript:** Better type safety prevents parameter errors (like the Polly issue).
-    *   **ESM Support:** Native support for ESM allows us to use modern libraries (`uuid`, `langchain`, etc.) without hacky workarounds.
+1.  **Migrated to AWS SDK v3 (Completed):**
+    *   **Modular:** Now importing only needed packages (`@aws-sdk/client-s3`, `@aws-sdk/client-dynamodb`, etc.). Bundle sizes reduced from ~40-70MB to ~3-10MB.
+    *   **First-Class TypeScript:** Better type safety now prevents parameter errors at compile time (like the Polly issue).
+    *   **ESM Support:** Native ESM support enables use of modern libraries (`uuid` v10+, etc.) without workarounds.
+    *   **Migration validated:** Both single-page and multi-page PDFs processed successfully through entire pipeline.
 
-2.  **Containerize Complex Functions:**
-    *   For the Vision/PDF pipeline, moving from Zip+Layer to a **Lambda Container Image** would eliminate the complex "Layer Build" scripts entirely, allowing us to just `COPY requirements.txt` in a Dockerfile.
+2.  **Future Consideration - Containerize Complex Functions:**
+    *   For the Vision/PDF pipeline, moving from Zip+Layer to a **Lambda Container Image** could eliminate the "Layer Build" scripts entirely, allowing us to just `COPY requirements.txt` in a Dockerfile.

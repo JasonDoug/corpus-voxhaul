@@ -1,17 +1,14 @@
 
 import { PollyTTSProvider } from './audio-synthesizer';
 import { LectureAgent } from '../models/agent';
+import { Readable } from 'stream';
 
-// Mock AWS SDK
-const mockSynthesizeSpeech = jest.fn();
-jest.mock('aws-sdk', () => {
-    return {
-        Polly: jest.fn(() => ({
-            synthesizeSpeech: mockSynthesizeSpeech
-        })),
-        config: { update: jest.fn() }
-    };
-});
+// Mock AWS SDK v3
+const mockSend = jest.fn();
+jest.mock('@aws-sdk/client-polly', () => ({
+  PollyClient: jest.fn(() => ({ send: mockSend })),
+  SynthesizeSpeechCommand: jest.fn((input) => ({ input })),
+}));
 jest.mock('../utils/config', () => ({
     config: { aws: { region: 'us-west-2' }, localstack: { useLocalStack: false } }
 }));
@@ -24,11 +21,16 @@ describe('PollyTTSProvider Chunking', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        // Default mock implementation
-        mockSynthesizeSpeech.mockReturnValue({
-            promise: jest.fn().mockResolvedValue({
-                AudioStream: Buffer.from('mock-audio'),
-            })
+        // Default mock implementation for AWS SDK v3
+        mockSend.mockImplementation(async (cmd: any) => {
+            if (cmd.input.OutputFormat === 'mp3') {
+                return { AudioStream: Readable.from([Buffer.from('mock-audio')]) };
+            }
+            if (cmd.input.OutputFormat === 'json') {
+                // minimal JSON-lines speech marks stream
+                return { AudioStream: Readable.from([Buffer.from('{"time":0,"type":"word","value":"Hi"}\n')]) };
+            }
+            throw new Error('unexpected OutputFormat');
         });
         provider = new PollyTTSProvider();
     });
@@ -46,13 +48,14 @@ describe('PollyTTSProvider Chunking', () => {
 
         const result = await provider.synthesize(sentence, voiceConfig);
 
-        // Should have called synthesizeSpeech multiple times
-        expect(mockSynthesizeSpeech).toHaveBeenCalledTimes(2);
+        // Should have called send multiple times (2 MP3 calls + 2 speech marks calls = 4 total)
+        const mp3Calls = mockSend.mock.calls.filter(([cmd]) => cmd.input?.OutputFormat === 'mp3');
+        expect(mp3Calls.length).toBe(2);
 
         // Verify results
         expect(result.audioBuffer.length).toBeGreaterThan(0);
         // 2 chunks * 'mock-audio'.length (10) = 20
-        expect(result.audioBuffer.length).toBe(20);
+        expect(result.audioBuffer.equals(Buffer.concat([Buffer.from('mock-audio'), Buffer.from('mock-audio')]))).toBe(true);
     });
 
     test('should handle single chunk text normally', async () => {
@@ -64,8 +67,13 @@ describe('PollyTTSProvider Chunking', () => {
         };
 
         await provider.synthesize(text, voiceConfig);
-        expect(mockSynthesizeSpeech).toHaveBeenCalledTimes(1);
-        const callArgs = mockSynthesizeSpeech.mock.calls[0][0];
-        expect(callArgs.Text).toBe(text);
+        
+        // Should have called send twice (1 MP3 call + 1 speech marks call)
+        const mp3Calls = mockSend.mock.calls.filter(([cmd]) => cmd.input?.OutputFormat === 'mp3');
+        expect(mp3Calls.length).toBe(1);
+        
+        // Verify the text was passed correctly
+        const mp3Command = mp3Calls[0][0];
+        expect(mp3Command.input.Text).toBe(text);
     });
 });

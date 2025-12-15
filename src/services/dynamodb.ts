@@ -20,7 +20,7 @@ const dynamoDBConfig: any = {
 };
 
 if (config.localstack.useLocalStack) {
-  dynamoDBConfig.endpoint = { url: config.localstack.endpoint };
+  dynamoDBConfig.endpoint = config.localstack.endpoint;
   dynamoDBConfig.credentials = {
     accessKeyId: 'test',
     secretAccessKey: 'test',
@@ -39,7 +39,7 @@ const dynamoDB = DynamoDBDocumentClient.from(client, {
 // Helper function to handle DynamoDB errors
 function handleDynamoDBError(error: any, operation: string): never {
   logger.error(`DynamoDB ${operation} failed`, { error: error.message });
-  throw new Error(`Database operation failed: ${operation}`);
+  throw new Error(`Database operation failed: ${operation} - ${error.message}`);
 }
 
 // ============================================================================
