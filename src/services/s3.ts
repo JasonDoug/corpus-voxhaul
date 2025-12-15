@@ -1,5 +1,16 @@
 // S3 client wrapper with local/production mode support
-import AWS from 'aws-sdk';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { Readable } from 'stream';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
@@ -7,41 +18,51 @@ import { ResourceError, ExternalServiceError } from '../utils/errors';
 import { withRetry } from '../utils/retry';
 
 // Configure AWS SDK based on environment
-const s3Config: AWS.S3.ClientConfiguration = {
+const s3Config: any = {
   region: config.aws.region,
-  s3ForcePathStyle: true, // Required for LocalStack
-  httpOptions: {
-    timeout: 30000, // 30 second timeout for operations
-    connectTimeout: 5000, // 5 second connection timeout
-  },
-  maxRetries: 0, // We handle retries ourselves
+  requestHandler: new NodeHttpHandler({
+    requestTimeout: 30000,
+    connectionTimeout: 5000,
+  }),
 };
 
 if (config.localstack.useLocalStack) {
   s3Config.endpoint = config.localstack.endpoint;
-  s3Config.accessKeyId = 'test';
-  s3Config.secretAccessKey = 'test';
+  s3Config.forcePathStyle = true;
+  s3Config.credentials = {
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+  };
 }
 // In Lambda, don't set credentials - they're provided automatically via execution role
-// Only set explicit credentials if they're actually provided
 
-const s3 = new AWS.S3(s3Config);
+const s3Client = new S3Client(s3Config);
+
+// Helper function to convert S3 stream to Buffer
+async function streamToBuffer(stream: any): Promise<Buffer> {
+  if (!stream) {
+    throw new Error('Stream is undefined');
+  }
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 // Helper function to handle S3 errors
 function handleS3Error(error: any, operation: string): never {
-  logger.error(`S3 ${operation} failed`, { error: error.message, code: error.code });
+  logger.error(`S3 ${operation} failed`, { error: error.message, code: error.name });
   
-  // Check for timeout errors
-  if (error.code === 'RequestTimeout' || error.code === 'TimeoutError') {
+  // In SDK v3, error.name is used instead of error.code
+  if (error.name === 'RequestTimeout' || error.name === 'TimeoutError') {
     throw new ResourceError(`Storage operation timed out: ${operation}`, { error: error.message });
   }
   
-  // Check for resource errors
-  if (error.code === 'NoSuchBucket' || error.code === 'NoSuchKey') {
+  if (error.name === 'NoSuchBucket' || error.name === 'NoSuchKey' || error.name === 'NotFound') {
     throw new ResourceError(`Storage resource not found: ${operation}`, { error: error.message });
   }
   
-  // Other errors are external service errors
   throw new ExternalServiceError(`Storage operation failed: ${operation}`, 's3', { error: error.message });
 }
 
@@ -54,7 +75,7 @@ export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: stri
     try {
       const key = `${jobId}/original.pdf`;
       
-      await s3.putObject({
+      const command = new PutObjectCommand({
         Bucket: config.s3.pdfBucket,
         Key: key,
         Body: pdfBuffer,
@@ -63,7 +84,9 @@ export async function uploadPDF(jobId: string, pdfBuffer: Buffer, filename: stri
           originalFilename: filename,
           jobId,
         },
-      }).promise();
+      });
+      
+      await s3Client.send(command);
       
       logger.info('PDF uploaded', { jobId, key });
       
@@ -82,13 +105,15 @@ export async function downloadPDF(jobId: string): Promise<Buffer> {
   try {
     const key = `${jobId}/original.pdf`;
     
-    const result = await s3.getObject({
+    const command = new GetObjectCommand({
       Bucket: config.s3.pdfBucket,
       Key: key,
-    }).promise();
+    });
+    
+    const result = await s3Client.send(command);
     
     logger.info('PDF downloaded', { jobId, key });
-    return result.Body as Buffer;
+    return await streamToBuffer(result.Body);
   } catch (error) {
     handleS3Error(error, 'downloadPDF');
   }
@@ -98,13 +123,15 @@ export async function streamPDF(jobId: string): Promise<Readable> {
   try {
     const key = `${jobId}/original.pdf`;
     
-    const stream = s3.getObject({
+    const command = new GetObjectCommand({
       Bucket: config.s3.pdfBucket,
       Key: key,
-    }).createReadStream();
+    });
+    
+    const result = await s3Client.send(command);
     
     logger.info('PDF stream created', { jobId, key });
-    return stream;
+    return result.Body as Readable;
   } catch (error) {
     handleS3Error(error, 'streamPDF');
   }
@@ -114,10 +141,12 @@ export async function deletePDF(jobId: string): Promise<void> {
   try {
     const key = `${jobId}/original.pdf`;
     
-    await s3.deleteObject({
+    const command = new DeleteObjectCommand({
       Bucket: config.s3.pdfBucket,
       Key: key,
-    }).promise();
+    });
+    
+    await s3Client.send(command);
     
     logger.info('PDF deleted', { jobId, key });
   } catch (error) {
@@ -129,11 +158,12 @@ export async function getPDFSignedUrl(jobId: string, expiresIn: number = 3600): 
   try {
     const key = `${jobId}/original.pdf`;
     
-    const url = s3.getSignedUrl('getObject', {
+    const command = new GetObjectCommand({
       Bucket: config.s3.pdfBucket,
       Key: key,
-      Expires: expiresIn,
     });
+    
+    const url = await getSignedUrl(s3Client, command, { expiresIn });
     
     logger.info('PDF signed URL generated', { jobId, expiresIn });
     return url;
@@ -150,7 +180,7 @@ export async function uploadAudio(jobId: string, audioBuffer: Buffer): Promise<s
   try {
     const key = `${jobId}/lecture.mp3`;
     
-    await s3.putObject({
+    const command = new PutObjectCommand({
       Bucket: config.s3.audioBucket,
       Key: key,
       Body: audioBuffer,
@@ -158,7 +188,9 @@ export async function uploadAudio(jobId: string, audioBuffer: Buffer): Promise<s
       Metadata: {
         jobId,
       },
-    }).promise();
+    });
+    
+    await s3Client.send(command);
     
     logger.info('Audio uploaded', { jobId, key });
     
@@ -176,13 +208,15 @@ export async function downloadAudio(jobId: string): Promise<Buffer> {
   try {
     const key = `${jobId}/lecture.mp3`;
     
-    const result = await s3.getObject({
+    const command = new GetObjectCommand({
       Bucket: config.s3.audioBucket,
       Key: key,
-    }).promise();
+    });
+    
+    const result = await s3Client.send(command);
     
     logger.info('Audio downloaded', { jobId, key });
-    return result.Body as Buffer;
+    return await streamToBuffer(result.Body);
   } catch (error) {
     handleS3Error(error, 'downloadAudio');
   }
@@ -192,13 +226,15 @@ export async function streamAudio(jobId: string): Promise<Readable> {
   try {
     const key = `${jobId}/lecture.mp3`;
     
-    const stream = s3.getObject({
+    const command = new GetObjectCommand({
       Bucket: config.s3.audioBucket,
       Key: key,
-    }).createReadStream();
+    });
+    
+    const result = await s3Client.send(command);
     
     logger.info('Audio stream created', { jobId, key });
-    return stream;
+    return result.Body as Readable;
   } catch (error) {
     handleS3Error(error, 'streamAudio');
   }
@@ -208,10 +244,12 @@ export async function deleteAudio(jobId: string): Promise<void> {
   try {
     const key = `${jobId}/lecture.mp3`;
     
-    await s3.deleteObject({
+    const command = new DeleteObjectCommand({
       Bucket: config.s3.audioBucket,
       Key: key,
-    }).promise();
+    });
+    
+    await s3Client.send(command);
     
     logger.info('Audio deleted', { jobId, key });
   } catch (error) {
@@ -223,11 +261,12 @@ export async function getAudioSignedUrl(jobId: string, expiresIn: number = 3600)
   try {
     const key = `${jobId}/lecture.mp3`;
     
-    const url = s3.getSignedUrl('getObject', {
+    const command = new GetObjectCommand({
       Bucket: config.s3.audioBucket,
       Key: key,
-      Expires: expiresIn,
     });
+    
+    const url = await getSignedUrl(s3Client, command, { expiresIn });
     
     logger.info('Audio signed URL generated', { jobId, expiresIn });
     return url;
@@ -251,7 +290,7 @@ export async function uploadCacheFile(
     const extension = contentType.includes('png') ? 'png' : 'jpg';
     const key = `${config.s3.cachePrefix}/${jobId}/${fileType}s/${fileId}.${extension}`;
     
-    await s3.putObject({
+    const command = new PutObjectCommand({
       Bucket: config.s3.pdfBucket,
       Key: key,
       Body: buffer,
@@ -261,7 +300,9 @@ export async function uploadCacheFile(
         fileType,
         fileId,
       },
-    }).promise();
+    });
+    
+    await s3Client.send(command);
     
     logger.info('Cache file uploaded', { jobId, fileType, fileId, key });
     
@@ -284,16 +325,18 @@ export async function downloadCacheFile(jobId: string, fileType: string, fileId:
     for (const ext of extensions) {
       try {
         const key = `${config.s3.cachePrefix}/${jobId}/${fileType}s/${fileId}.${ext}`;
-        const result = await s3.getObject({
+        const command = new GetObjectCommand({
           Bucket: config.s3.pdfBucket,
           Key: key,
-        }).promise();
+        });
+        
+        const result = await s3Client.send(command);
         
         logger.info('Cache file downloaded', { jobId, fileType, fileId, key });
-        return result.Body as Buffer;
+        return await streamToBuffer(result.Body);
       } catch (error: any) {
         lastError = error;
-        if (error.code !== 'NoSuchKey') {
+        if (error.name !== 'NoSuchKey') {
           throw error;
         }
       }
@@ -310,10 +353,12 @@ export async function deleteCacheFiles(jobId: string): Promise<void> {
     const prefix = `${config.s3.cachePrefix}/${jobId}/`;
     
     // List all objects with the prefix
-    const listResult = await s3.listObjectsV2({
+    const listCommand = new ListObjectsV2Command({
       Bucket: config.s3.pdfBucket,
       Prefix: prefix,
-    }).promise();
+    });
+    
+    const listResult = await s3Client.send(listCommand);
     
     if (!listResult.Contents || listResult.Contents.length === 0) {
       logger.info('No cache files to delete', { jobId });
@@ -321,12 +366,14 @@ export async function deleteCacheFiles(jobId: string): Promise<void> {
     }
     
     // Delete all objects
-    await s3.deleteObjects({
+    const deleteCommand = new DeleteObjectsCommand({
       Bucket: config.s3.pdfBucket,
       Delete: {
         Objects: listResult.Contents.map(obj => ({ Key: obj.Key! })),
       },
-    }).promise();
+    });
+    
+    await s3Client.send(deleteCommand);
     
     logger.info('Cache files deleted', { jobId, count: listResult.Contents.length });
   } catch (error) {
@@ -345,12 +392,14 @@ export async function createBucketIfNotExists(): Promise<void> {
   }
   
   try {
-    await s3.headBucket({ Bucket: config.s3.pdfBucket }).promise();
+    const headCommand = new HeadBucketCommand({ Bucket: config.s3.pdfBucket });
+    await s3Client.send(headCommand);
     logger.info(`Bucket ${config.s3.pdfBucket} already exists`);
   } catch (error: any) {
-    if (error.code === 'NotFound' || error.code === 'NoSuchBucket') {
+    if (error.name === 'NotFound' || error.name === 'NoSuchBucket') {
       try {
-        await s3.createBucket({ Bucket: config.s3.pdfBucket }).promise();
+        const createCommand = new CreateBucketCommand({ Bucket: config.s3.pdfBucket });
+        await s3Client.send(createCommand);
         logger.info(`Bucket ${config.s3.pdfBucket} created`);
       } catch (createError) {
         logger.error(`Failed to create bucket ${config.s3.pdfBucket}`, { error: createError });

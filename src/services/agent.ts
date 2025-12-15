@@ -1,5 +1,5 @@
 // Agent Management Service
-import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import { LectureAgent, PersonalityConfig, VoiceConfig } from '../models/agent';
 import * as db from './dynamodb';
 import { logger } from '../utils/logger';
@@ -109,7 +109,7 @@ export async function createAgent(
   // Create agent with generated ID and timestamp
   const agent: LectureAgent = {
     ...agentData,
-    id: uuidv4(),
+    id: crypto.randomUUID(),
     createdAt: new Date(),
   };
 

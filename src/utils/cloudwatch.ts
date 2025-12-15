@@ -1,10 +1,10 @@
 // CloudWatch integration for metrics and logs
-import * as AWS from 'aws-sdk';
+import { CloudWatchClient, PutMetricDataCommand, PutMetricAlarmCommand } from '@aws-sdk/client-cloudwatch';
 import { config } from './config';
 import { logger } from './logger';
 
 // Initialize CloudWatch client
-const cloudwatch = new AWS.CloudWatch({
+const cloudwatch = new CloudWatchClient({
   region: config.aws.region,
   ...(config.localstack.useLocalStack && {
     endpoint: config.localstack.endpoint,
@@ -37,20 +37,20 @@ export async function publishMetric(metric: CloudWatchMetric): Promise<void> {
         }))
       : [];
 
-    await cloudwatch
-      .putMetricData({
-        Namespace: 'PDFLectureService',
-        MetricData: [
-          {
-            MetricName: metric.name,
-            Value: metric.value,
-            Unit: metric.unit as any,
-            Timestamp: metric.timestamp || new Date(),
-            Dimensions: dimensions,
-          },
-        ],
-      })
-      .promise();
+    const command = new PutMetricDataCommand({
+      Namespace: 'PDFLectureService',
+      MetricData: [
+        {
+          MetricName: metric.name,
+          Value: metric.value,
+          Unit: metric.unit as any,
+          Timestamp: metric.timestamp || new Date(),
+          Dimensions: dimensions,
+        },
+      ],
+    });
+    
+    await cloudwatch.send(command);
 
     logger.debug('Metric published to CloudWatch', { metric });
   } catch (error) {
@@ -93,12 +93,11 @@ export async function publishMetrics(metrics: CloudWatchMetric[]): Promise<void>
     const batchSize = 20;
     for (let i = 0; i < metricData.length; i += batchSize) {
       const batch = metricData.slice(i, i + batchSize);
-      await cloudwatch
-        .putMetricData({
-          Namespace: 'PDFLectureService',
-          MetricData: batch,
-        })
-        .promise();
+      const command = new PutMetricDataCommand({
+        Namespace: 'PDFLectureService',
+        MetricData: batch,
+      });
+      await cloudwatch.send(command);
     }
 
     logger.debug('Metrics published to CloudWatch', { count: metrics.length });
@@ -131,20 +130,20 @@ export async function createAlarm(params: {
         }))
       : [];
 
-    await cloudwatch
-      .putMetricAlarm({
-        AlarmName: params.alarmName,
-        MetricName: params.metricName,
-        Namespace: 'PDFLectureService',
-        Statistic: params.statistic,
-        Period: params.period,
-        EvaluationPeriods: params.evaluationPeriods,
-        Threshold: params.threshold,
-        ComparisonOperator: params.comparisonOperator,
-        Dimensions: dimensions,
-        TreatMissingData: 'notBreaching',
-      })
-      .promise();
+    const command = new PutMetricAlarmCommand({
+      AlarmName: params.alarmName,
+      MetricName: params.metricName,
+      Namespace: 'PDFLectureService',
+      Statistic: params.statistic as any,
+      Period: params.period,
+      EvaluationPeriods: params.evaluationPeriods,
+      Threshold: params.threshold,
+      ComparisonOperator: params.comparisonOperator as any,
+      Dimensions: dimensions,
+      TreatMissingData: 'notBreaching',
+    });
+    
+    await cloudwatch.send(command);
 
     logger.info('CloudWatch alarm created', { alarmName: params.alarmName });
   } catch (error) {

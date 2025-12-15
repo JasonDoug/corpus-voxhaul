@@ -1,5 +1,12 @@
 // DynamoDB client wrapper with local/production mode support
-import AWS from 'aws-sdk';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  DeleteCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { Job, JobStatus, StageStatus } from '../models/job';
@@ -8,23 +15,31 @@ import { ExtractedContent, SegmentedContent } from '../models/content';
 import { WordTiming } from '../models/audio';
 
 // Configure AWS SDK based on environment
-const dynamoDBConfig: AWS.DynamoDB.ClientConfiguration = {
+const dynamoDBConfig: any = {
   region: config.aws.region,
 };
 
 if (config.localstack.useLocalStack) {
   dynamoDBConfig.endpoint = config.localstack.endpoint;
-  dynamoDBConfig.accessKeyId = 'test';
-  dynamoDBConfig.secretAccessKey = 'test';
+  dynamoDBConfig.credentials = {
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+  };
 }
 // In Lambda, don't set credentials - they're provided automatically via execution role
 
-const dynamoDB = new AWS.DynamoDB.DocumentClient(dynamoDBConfig);
+const client = new DynamoDBClient(dynamoDBConfig);
+const dynamoDB = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    removeUndefinedValues: true, // Remove undefined values from objects
+    convertClassInstanceToMap: true, // Convert Date objects and other class instances
+  },
+});
 
 // Helper function to handle DynamoDB errors
 function handleDynamoDBError(error: any, operation: string): never {
   logger.error(`DynamoDB ${operation} failed`, { error: error.message });
-  throw new Error(`Database operation failed: ${operation}`);
+  throw new Error(`Database operation failed: ${operation} - ${error.message}`);
 }
 
 // ============================================================================
@@ -67,10 +82,12 @@ function recordToJob(record: JobRecord): Job {
 export async function createJob(job: Job): Promise<Job> {
   try {
     const record = jobToRecord(job);
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.jobsTable,
       Item: record,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Job created', { jobId: job.jobId });
     return job;
@@ -81,10 +98,12 @@ export async function createJob(job: Job): Promise<Job> {
 
 export async function getJob(jobId: string): Promise<Job | null> {
   try {
-    const result = await dynamoDB.get({
+    const command = new GetCommand({
       TableName: config.dynamodb.jobsTable,
       Key: { jobId },
-    }).promise();
+    });
+    
+    const result = await dynamoDB.send(command);
 
     if (!result.Item) {
       return null;
@@ -111,10 +130,12 @@ export async function updateJob(jobId: string, updates: Partial<Job>): Promise<J
     };
 
     const record = jobToRecord(updated);
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.jobsTable,
       Item: record,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Job updated', { jobId });
     return updated;
@@ -128,10 +149,12 @@ export async function updateJob(jobId: string, updates: Partial<Job>): Promise<J
 
 export async function deleteJob(jobId: string): Promise<void> {
   try {
-    await dynamoDB.delete({
+    const command = new DeleteCommand({
       TableName: config.dynamodb.jobsTable,
       Key: { jobId },
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Job deleted', { jobId });
   } catch (error) {
@@ -141,9 +164,11 @@ export async function deleteJob(jobId: string): Promise<void> {
 
 export async function listJobs(): Promise<Job[]> {
   try {
-    const result = await dynamoDB.scan({
+    const command = new ScanCommand({
       TableName: config.dynamodb.jobsTable,
-    }).promise();
+    });
+    
+    const result = await dynamoDB.send(command);
 
     return (result.Items || []).map(item => recordToJob(item as JobRecord));
   } catch (error) {
@@ -199,10 +224,12 @@ export async function createAgent(agent: LectureAgent): Promise<LectureAgent> {
     }
 
     const record = agentToRecord(agent);
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.agentsTable,
       Item: record,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Agent created', { agentId: agent.id, name: agent.name });
     return agent;
@@ -216,10 +243,12 @@ export async function createAgent(agent: LectureAgent): Promise<LectureAgent> {
 
 export async function getAgent(id: string): Promise<LectureAgent | null> {
   try {
-    const result = await dynamoDB.get({
+    const command = new GetCommand({
       TableName: config.dynamodb.agentsTable,
       Key: { id },
-    }).promise();
+    });
+    
+    const result = await dynamoDB.send(command);
 
     if (!result.Item) {
       return null;
@@ -262,10 +291,12 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
     };
 
     const record = agentToRecord(updated);
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.agentsTable,
       Item: record,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Agent updated', { agentId: id });
     return updated;
@@ -279,10 +310,12 @@ export async function updateAgent(id: string, updates: Partial<LectureAgent>): P
 
 export async function deleteAgent(id: string): Promise<void> {
   try {
-    await dynamoDB.delete({
+    const command = new DeleteCommand({
       TableName: config.dynamodb.agentsTable,
       Key: { id },
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Agent deleted', { agentId: id });
   } catch (error) {
@@ -292,9 +325,11 @@ export async function deleteAgent(id: string): Promise<void> {
 
 export async function listAgents(): Promise<LectureAgent[]> {
   try {
-    const result = await dynamoDB.scan({
+    const command = new ScanCommand({
       TableName: config.dynamodb.agentsTable,
-    }).promise();
+    });
+    
+    const result = await dynamoDB.send(command);
 
     return (result.Items || []).map(item => recordToAgent(item as AgentRecord));
   } catch (error) {
@@ -326,10 +361,12 @@ export async function createContent(jobId: string): Promise<ContentRecord> {
       updatedAt: new Date().toISOString(),
     };
 
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.contentTable,
       Item: record,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Content record created', { jobId });
     return record;
@@ -340,10 +377,12 @@ export async function createContent(jobId: string): Promise<ContentRecord> {
 
 export async function getContent(jobId: string): Promise<ContentRecord | null> {
   try {
-    const result = await dynamoDB.get({
+    const command = new GetCommand({
       TableName: config.dynamodb.contentTable,
       Key: { jobId },
-    }).promise();
+    });
+    
+    const result = await dynamoDB.send(command);
 
     if (!result.Item) {
       return null;
@@ -369,10 +408,12 @@ export async function updateContent(jobId: string, updates: Partial<ContentRecor
       updatedAt: new Date().toISOString(),
     };
 
-    await dynamoDB.put({
+    const command = new PutCommand({
       TableName: config.dynamodb.contentTable,
       Item: updated,
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Content updated', { jobId });
     return updated;
@@ -386,10 +427,12 @@ export async function updateContent(jobId: string, updates: Partial<ContentRecor
 
 export async function deleteContent(jobId: string): Promise<void> {
   try {
-    await dynamoDB.delete({
+    const command = new DeleteCommand({
       TableName: config.dynamodb.contentTable,
       Key: { jobId },
-    }).promise();
+    });
+    
+    await dynamoDB.send(command);
 
     logger.info('Content deleted', { jobId });
   } catch (error) {
@@ -407,7 +450,8 @@ export async function createTablesIfNotExist(): Promise<void> {
     return;
   }
 
-  const dynamoDBClient = new AWS.DynamoDB(dynamoDBConfig);
+  // Import DynamoDB commands for table management
+  const { DescribeTableCommand, CreateTableCommand } = require('@aws-sdk/client-dynamodb');
 
   const tables = [
     {
@@ -429,15 +473,17 @@ export async function createTablesIfNotExist(): Promise<void> {
 
   for (const tableConfig of tables) {
     try {
-      await dynamoDBClient.describeTable({ TableName: tableConfig.TableName }).promise();
+      const describeCommand = new DescribeTableCommand({ TableName: tableConfig.TableName });
+      await client.send(describeCommand);
       logger.info(`Table ${tableConfig.TableName} already exists`);
     } catch (error: any) {
-      if (error.code === 'ResourceNotFoundException') {
+      if (error.name === 'ResourceNotFoundException') {
         try {
-          await dynamoDBClient.createTable({
+          const createCommand = new CreateTableCommand({
             ...tableConfig,
             BillingMode: 'PAY_PER_REQUEST',
-          }).promise();
+          });
+          await client.send(createCommand);
           logger.info(`Table ${tableConfig.TableName} created`);
         } catch (createError) {
           logger.error(`Failed to create table ${tableConfig.TableName}`, { error: createError });

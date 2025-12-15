@@ -45,3 +45,7 @@ temp/
 
 # SAM Build Artifacts
 .aws-sam/
+packaged.yaml
+
+# Lambda Layers (build artifacts)
+layers/pdf_layer.zip

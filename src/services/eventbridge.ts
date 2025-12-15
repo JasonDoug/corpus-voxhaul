@@ -1,10 +1,12 @@
 // EventBridge service for asynchronous function triggering
-import { EventBridge } from 'aws-sdk';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 
-const eventBridge = new EventBridge({
-  endpoint: config.isLocal ? 'http://localhost:4566' : undefined,
+const eventBridge = new EventBridgeClient({
+  ...(config.isLocal && {
+    endpoint: 'http://localhost:4566',
+  }),
   region: config.awsRegion,
 });
 
@@ -26,7 +28,7 @@ export async function publishPipelineEvent(
   try {
     logger.info('Publishing pipeline event', { detailType, jobId: detail.jobId });
     
-    const params: EventBridge.PutEventsRequest = {
+    const command = new PutEventsCommand({
       Entries: [
         {
           Source: 'pdf-lecture-service',
@@ -35,9 +37,9 @@ export async function publishPipelineEvent(
           EventBusName: eventBusName,
         },
       ],
-    };
+    });
     
-    const result = await eventBridge.putEvents(params).promise();
+    const result = await eventBridge.send(command);
     
     if (result.FailedEntryCount && result.FailedEntryCount > 0) {
       const errors = result.Entries?.filter(e => e.ErrorCode).map(e => ({
